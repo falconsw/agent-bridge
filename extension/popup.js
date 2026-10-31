@@ -1,41 +1,50 @@
 const $ = (id) => document.getElementById(id);
 
-function durumYaz(s) {
-  $("nokta").classList.toggle("acik", s.acik);
-  $("durum").textContent = s.acik ? "bağlı" : s.tokenVar ? "bekleniyor…" : "token yok";
-  $("baglan").hidden = s.acik;
-  $("kapat").hidden = !s.acik;
-  $("etkinlik").innerHTML = (s.etkinlik ?? [])
-    .map((e) => `<li>${e.saat} — ${e.cmd}${e.hedef ? " · " + e.hedef : ""}</li>`)
-    .join("") || "<li>henüz işlem yok</li>";
+function renderStatus(s) {
+  $("dot").classList.toggle("on", s.open);
+  $("status").textContent = s.open
+    ? s.myTabs
+      ? `bağlı · ${s.myTabs} agent sekmesi / connected`
+      : "bağlı · boşta / connected · idle"
+    : s.hasToken
+      ? "köprü bekleniyor… / waiting for bridge…"
+      : "token yok / no token";
+  $("connect").hidden = s.open;
+  $("disconnect").hidden = !s.open;
+  $("activity").innerHTML =
+    (s.activity ?? [])
+      .map((e) => `<li>${e.time} — ${e.cmd}${e.target ? " · " + e.target : ""}</li>`)
+      .join("") || "<li>henüz işlem yok / nothing yet</li>";
 }
 
-function yenile() {
-  chrome.runtime.sendMessage({ type: "durum" }, (s) => s && durumYaz(s));
+function refresh() {
+  chrome.runtime.sendMessage({ type: "status" }, (s) => s && renderStatus(s));
 }
 
 chrome.storage.local.get(["token", "port"], ({ token, port }) => {
   if (token) $("token").value = token;
   if (port) $("port").value = port;
 });
-yenile();
+refresh();
 
-$("baglan").onclick = () => {
+$("connect").onclick = () => {
   const token = $("token").value.trim().toUpperCase();
   const port = Number($("port").value) || 8791;
   if (!token) {
-    $("durum").textContent = "token gir";
+    $("status").textContent = "önce token gir / enter the token first";
     return;
   }
-  chrome.storage.local.set({ token, port }, () => chrome.runtime.sendMessage({ type: "yeniden" }));
-  setTimeout(yenile, 400);
+  chrome.storage.local.set({ token, port }, () => chrome.runtime.sendMessage({ type: "reconnect" }));
+  $("connect").textContent = "Kaydedildi ✓ / Saved ✓";
+  setTimeout(() => ($("connect").textContent = "Bağlan / Connect"), 1500);
+  setTimeout(refresh, 400);
 };
 
-$("kapat").onclick = () => {
+$("disconnect").onclick = () => {
   chrome.storage.local.remove("token", () => {
     $("token").value = "";
-    yenile();
+    refresh();
   });
 };
 
-setInterval(yenile, 1500);
+setInterval(refresh, 1500);

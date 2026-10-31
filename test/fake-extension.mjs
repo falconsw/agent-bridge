@@ -1,50 +1,55 @@
-// Sahte eklenti: Chrome olmadan köprüyü uçtan uca test etmek için.
-// Gerçek eklentinin yaptığı şeyi yapar: bağlan, hello gönder, komutlara hazır yanıt ver.
+// Fake extension: exercises the bridge end to end without Chrome.
+// Mimics the real extension: connect, send hello, answer commands with canned data.
 import WebSocket from "ws";
 
 const [, , portArg, tokenArg] = process.argv;
 const port = Number(portArg) || 8799;
 const token = tokenArg || "TEST-TOKEN";
-const KUCUK_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const TINY_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
-let zamanlayici;
-const baglan = () => {
-  clearTimeout(zamanlayici);
+let timer;
+const connect = () => {
+  clearTimeout(timer);
   const ws = new WebSocket(`ws://127.0.0.1:${port}`);
   ws.on("open", () => {
-    console.log(`[sahte-eklenti] bağlandı (port ${port})`);
+    console.log(`[fake-extension] connected (port ${port})`);
     ws.send(JSON.stringify({ type: "hello", token, chrome: "fake" }));
   });
   ws.on("message", (raw) => {
     const msg = JSON.parse(raw.toString());
     if (msg.type === "ready") return;
-    const yanit = (ok, data) => ws.send(JSON.stringify({ id: msg.id, ok, ...(ok ? { data } : { error: data }) }));
+    const reply = (ok, data) => ws.send(JSON.stringify({ id: msg.id, ok, ...(ok ? { data } : { error: data }) }));
     switch (msg.cmd) {
       case "tabs":
-        return yanit(true, [{ id: 1, title: "Örnek Sayfa", url: "https://example.com/", active: true }]);
+        return reply(true, [{ id: 1, title: "Example Page", url: "https://example.com/", active: true }]);
       case "eval": {
-        const d = msg.args.expression;
-        if (d.includes("ogeler: envanter"))
-          return yanit(true, { title: "Örnek Sayfa", url: "https://example.com/", metin: "Merhaba dünya. Bu bir test sayfasıdır.", ogeler: [{ i: 0, tag: "a", metin: "More information...", tip: "", href: "https://www.iana.org/domains/example" }] });
-        if (d.includes(".click()"))
-          return yanit(true, { ok: true, tıklanan: "More information..." });
-        if (d.includes("insertText"))
-          return yanit(true, { ok: true });
-        return yanit(true, { ok: true });
+        const script = msg.args.expression;
+        if (script.includes("elements,"))
+          return reply(true, {
+            title: "Example Page",
+            url: "https://example.com/",
+            text: "Hello world. This is a test page.",
+            elements: [{ i: 0, tag: "a", label: "More information...", type: "", href: "https://www.iana.org/domains/example" }],
+          });
+        if (script.includes(".click()")) return reply(true, { ok: true, clicked: "More information..." });
+        if (script.includes("insertText")) return reply(true, { ok: true });
+        return reply(true, { ok: true });
       }
       case "navigate":
-        return yanit(true, { tabId: 1, url: msg.args.url });
+        return reply(true, { tabId: 1, url: msg.args.url });
       case "screenshot":
-        return yanit(true, { data: KUCUK_PNG });
+        return reply(true, { data: TINY_PNG });
+      case "cleanup":
+        return reply(true, { closed: true, mode: "idle" });
       case "ping":
-        return yanit(true, { pong: true });
+        return reply(true, { pong: true });
       default:
-        return yanit(false, `sahte eklenti bu komutu bilmiyor: ${msg.cmd}`);
+        return reply(false, `fake extension does not know this command: ${msg.cmd}`);
     }
   });
   ws.on("close", () => {
-    zamanlayici = setTimeout(baglan, 1000);
+    timer = setTimeout(connect, 1000);
   });
   ws.on("error", () => ws.terminate());
 };
-baglan();
+connect();

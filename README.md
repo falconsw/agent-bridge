@@ -41,13 +41,14 @@ claude mcp add agent-bridge -- node /tam/yol/agent-bridge/bin/agent-bridge.mjs
 
 | Araç | İş |
 | --- | --- |
-| `tabs` | Açık sekmeleri listeler |
+| `tabs` | Agent'in kendi sekmelerini listeler (kullanıcı sekmeleri görünmez) |
 | `read` | Başlık, adres, görünür metin + **indeksli tıklanabilir öğe envanteri** |
 | `click` | Seçici, öğe indeksi ya da metinle tıklar |
 | `type` | Alana yazar (contenteditable dahil); `pressEnter` seçeneği |
-| `navigate` | Adrese gider (aynı/yeni sekme) |
+| `navigate` | Agent sekmesinde adrese gider; gerekirse yeni agent sekmesi açar |
 | `screenshot` | PNG kaydeder ve döndürür |
 | `eval` | Sayfada JavaScript çalıştırır (dikkatli) |
+| `done` | İşi bitirir: sekmeleri kapatır, bekleme moduna geçer |
 
 Önerilen akış: önce `read` (envanteri al), sonra `click`/`type`'ta indeksleri kullan.
 
@@ -62,6 +63,8 @@ npm test                                          # 2. uç (MCP istemcisi)
 
 ## Güvenlik
 
+- **Sekme yalıtımı:** agent yalnız **kendi açtığı sekmelerde** çalışır; kullanıcının sekmelerini listeleyemez, onlara gezinemez, tıklayamaz. Bir işe başlamak zorunda olduğu sekme her zaman `navigate` ile agent'in kendi sekmesidir.
+- **Bekleme modu:** agent `done` aracını çağırınca ya da 10 dakika işlem olmayınca tüm agent sekmeleri kapanır, debugger ayrılır (sarı çubuk gider) ve köprü boşa düşer. Sonraki iş yine temiz bir sekmeyle başlar.
 - Köprü yalnız `127.0.0.1` dinler; eşleşme token'la yapılır. Token'ı bilen her yerel süreç tarayıcıyı sürebilir — tek kullanıcılı makinede sınır budur (her yerel geliştirme aracında olduğu gibi).
 - `chrome.debugger` kullandığı için eklenen sekmede Chrome'un "**... tarafından hataları ayıklanıyor**" çubuğu görünür; görmeniz bilerek böyle — ne zaman devrede olduğunu gösterir.
 - **Prompt injection:** agent kötü niyetli bir sayfanın metniyle yönlendirilebilir. Eklenti popup'ındaki işlem günlüğü ne yapıldığını gösterir; yine de önemli hesaplarda agent'a kritik işlem yaptıracokseniz izleyin. Yol haritasındaki *onay modu* her yan etkili işlemde bildirimle onay isteyecek.
