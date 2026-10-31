@@ -29,9 +29,11 @@ agent (MCP istemcisi)  ⇄ stdio  ⇄  agent-bridge  ⇄ WebSocket (127.0.0.1)  
 node bin/agent-bridge.mjs
 ```
 
-Çıktıda token görünür: `Token: XXXX-XXXX`. Eklenti popup'ına bu token'ı yazıp **Bağlan**'a bas — rozet **AÇIK** olur.
+**3. Eşleşme (tek hareket):** eklenti popup'ında **"Agent erişimi"** anahtarını aç. İlk bağlantı otomatik eşleşir (TOFU — ilk bağlanana güven); eşleşme `~/.agent-bridge/token.json`'a yazılır, sonraki köprü süreçleri onu tanır. Rozet **AÇIK** olur.
 
-**3. Agent'a MCP olarak ekle (örnek, Claude Code):**
+Yeniden eşleştirmek gerekirse: köprüyü `--fresh` ile başlat.
+
+**4. Agent'a MCP olarak ekle (örnek, Claude Code):**
 
 ```
 claude mcp add agent-bridge -- node /tam/yol/agent-bridge/bin/agent-bridge.mjs

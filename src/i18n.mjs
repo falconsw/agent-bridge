@@ -5,16 +5,19 @@ const dicts = {
   tr: {
     help: `agent-bridge — agent'lara Chrome'da işlem yaptıran köprü
 
-Kullanım: agent-bridge [--port 8791] [--token XXXX-XXXX] [--shots <klasör>] [--lang tr|en]
+Kullanım: agent-bridge [--port 8791] [--token XXXX-XXXX] [--shots <klasör>] [--lang tr|en] [--fresh]
 
-1. Bu komutu çalıştır → token basılır
-2. Chrome'da Agent Bridge eklentisini aç, token'ı yapıştır, Bağlan'a bas
+1. Bu komutu çalıştır
+2. Chrome'da Agent Bridge eklentisinde "Agent erişimi" anahtarını aç (ilk açılışta otomatik eşleşir)
 3. Agent'ına MCP sunucusu olarak ekle:  agent-bridge  (stdio)
 
 Araçlar: tabs, read, click, type, navigate, screenshot, eval, done`,
     bridgeListening: "[bridge] ws://127.0.0.1:{port} dinleniyor",
     bridgeToken: "[bridge] Token: {token}",
-    bridgeHowTo: "[bridge] Chrome'da Agent Bridge eklentisini açıp bu token'ı gir, sonra Bağlan'a bas.",
+    bridgeHowTo: "[bridge] Chrome'da Agent Bridge eklentisinde \"Agent erişimi\" anahtarını aç, gerisi otomatik.",
+    bridgePairMode: "[bridge] Eşleşme modu: ilk bağlanan eklenti otomatik tanınır (TOFU).",
+    bridgePinned: "[bridge] Eşleşildi / paired — Token: {token}",
+    pinRejected: "[bridge] Farklı bir token reddedildi; sıfırlamak için --fresh ile başlat / different token rejected; start with --fresh to re-pin",
     extConnected: "[bridge] Eklenti bağlandı (Chrome {chrome})",
     extDisconnected: "[bridge] Eklenti bağlantısı kesildi",
     extNotConnected: "Eklenti bağlı değil. Chrome'da Agent Bridge popup'ını açıp Bağlan'a bas (token'lar eşleşmeli).",
@@ -57,16 +60,19 @@ Araçlar: tabs, read, click, type, navigate, screenshot, eval, done`,
   en: {
     help: `agent-bridge — lets terminal agents operate Chrome
 
-Usage: agent-bridge [--port 8791] [--token XXXX-XXXX] [--shots <folder>] [--lang tr|en]
+Usage: agent-bridge [--port 8791] [--token XXXX-XXXX] [--shots <folder>] [--lang tr|en] [--fresh]
 
-1. Run this command → a token is printed
-2. Open the Agent Bridge extension in Chrome, paste the token, press Connect
+1. Run this command
+2. In the Chrome extension, flip "Agent access" on (the first connection pairs automatically)
 3. Add it to your agent as an MCP server:  agent-bridge  (stdio)
 
 Tools: tabs, read, click, type, navigate, screenshot, eval, done`,
     bridgeListening: "[bridge] ws://127.0.0.1:{port} listening",
     bridgeToken: "[bridge] Token: {token}",
-    bridgeHowTo: "[bridge] Open the Agent Bridge extension in Chrome, paste this token and press Connect.",
+    bridgeHowTo: "[bridge] Flip \"Agent access\" on in the Chrome extension; the rest is automatic.",
+    bridgePairMode: "[bridge] Pairing mode: the first extension that connects is trusted automatically (TOFU).",
+    bridgePinned: "[bridge] Paired — Token: {token}",
+    pinRejected: "[bridge] Different token rejected; start with --fresh to re-pin",
     extConnected: "[bridge] Extension connected (Chrome {chrome})",
     extDisconnected: "[bridge] Extension disconnected",
     extNotConnected: "Chrome extension is not connected. Open the Agent Bridge popup in Chrome and press Connect (tokens must match).",

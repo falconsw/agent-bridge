@@ -11,6 +11,7 @@ let ws = null;
 let token = "";
 let port = DEFAULT_PORT;
 let lang = "tr";
+let enabled = false;
 let attached = new Set(); // tabs with an active debugger session
 let myTabs = []; // tabs the agent opened (ordered: newest last)
 let myTabsLoaded = false;
@@ -19,6 +20,13 @@ let activity = []; // recent actions (shown in the popup)
 let idleTimer = null;
 
 const T = (key, vars) => t(lang, key, vars);
+
+function makeToken() {
+  // Readable pairing token without ambiguous characters (0/O, 1/I); mirrors src/bridge.mjs.
+  const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const chunk = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => alphabet[b % alphabet.length]).join("");
+  return `${chunk(4)}-${chunk(4)}`;
+}
 
 const setBadge = (text, color = "#1a7f37") => {
   chrome.action.setBadgeText({ text });
@@ -142,15 +150,17 @@ async function handleCommand(cmd, args = {}) {
 }
 
 function connect() {
-  chrome.storage.local.get(["token", "port", "lang"], ({ token: savedToken, port: savedPort, lang: savedLang }) => {
-    token = savedToken || "";
+  chrome.storage.local.get(["enabled", "token", "port", "lang"], ({ enabled: isEnabled, token: savedToken, port: savedPort, lang: savedLang }) => {
+    enabled = !!isEnabled;
+    if (!enabled) {
+      setBadge("");
+      return;
+    }
+    token = savedToken || makeToken();
+    if (token !== savedToken) chrome.storage.local.set({ token }); // first run: generate once, reuse forever
     port = savedPort || DEFAULT_PORT;
     lang = savedLang || "tr";
     setLang(lang);
-    if (!token) {
-      setBadge("?", "#9a6700");
-      return;
-    }
     clearTimeout(connect.timer);
     try {
       ws = new WebSocket(`ws://127.0.0.1:${port}`);
@@ -221,8 +231,31 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
+// Turning the access toggle off: stop reconnecting, drop the socket, close agent tabs.
+function disableAccess() {
+  enabled = false;
+  clearTimeout(connect.timer);
+  clearInterval(connect.heartbeat);
+  clearTimeout(idleTimer);
+  if (ws) {
+    const closing = ws;
+    ws = null;
+    closing.onclose = null;
+    closing.onerror = null;
+    closing.close();
+  }
+  cleanup(T("toggleOff")).then(() => setBadge(""));
+}
+
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && (changes.token || changes.port || changes.lang)) {
+  if (area !== "local") return;
+  if (changes.enabled) {
+    retries = 0;
+    if (changes.enabled.newValue) connect();
+    else disableAccess();
+    return;
+  }
+  if ((changes.token && changes.token.newValue !== token) || changes.port || changes.lang) {
     ws?.close();
     retries = 0;
     connect();
@@ -232,7 +265,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Status query from the popup
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.type === "status") {
-    reply({ open: ws?.readyState === 1, activity, hasToken: !!token, port, myTabs: myTabs.length, lang });
+    reply({ open: ws?.readyState === 1, activity, enabled, port, myTabs: myTabs.length, lang, token });
   }
   if (msg.type === "reconnect") connect();
   return false;

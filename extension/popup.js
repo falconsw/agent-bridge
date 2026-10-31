@@ -6,24 +6,24 @@ let status = null;
 
 function render() {
   const T = (key, vars) => t(lang, key, vars);
-  $("token-label").textContent = T("tokenLabel");
-  $("port-label").textContent = T("portLabel");
+  $("access-label").textContent = T("agentAccess");
   $("lang-label").textContent = T("languageLabel");
-  $("connect").textContent = status?.justSaved ? T("savedBtn") : T("connectBtn");
-  $("disconnect").textContent = T("disconnectBtn");
+  $("advanced-label").textContent = T("advanced");
+  $("port-label").textContent = T("portLabel");
+  $("token-label").textContent = T("tokenField");
   $("activity-heading").textContent = T("recentActions");
+  $("enabled").checked = !!status?.enabled;
 
   if (status) {
     $("dot").classList.toggle("on", status.open);
-    $("status").textContent = status.open
-      ? status.myTabs
-        ? T("statusConnectedTabs", { n: status.myTabs })
-        : T("statusConnectedIdle")
-      : status.hasToken
-        ? T("statusWaiting")
-        : T("statusNoToken");
-    $("connect").hidden = status.open;
-    $("disconnect").hidden = !status.open;
+    $("dot").style.background = status.enabled ? undefined : "#666";
+    $("status").textContent = !status.enabled
+      ? T("statusOff")
+      : status.open
+        ? status.myTabs
+          ? T("statusConnectedTabs", { n: status.myTabs })
+          : T("statusConnectedIdle")
+        : T("statusWaiting");
     $("activity").innerHTML =
       (status.activity ?? []).map((e) => `<li>${e.time} — ${e.cmd}${e.target ? " · " + e.target : ""}</li>`).join("") ||
       `<li>${T("nothingYet")}</li>`;
@@ -36,48 +36,35 @@ function refresh() {
       status = s;
       lang = s.lang || "tr";
       $("lang").value = lang;
+      if (s.token) $("token").value = s.token; // show the automatically generated pairing token
       render();
     }
   });
 }
 
-chrome.storage.local.get(["token", "port", "lang"], ({ token, port, lang: savedLang }) => {
+chrome.storage.local.get(["token", "port", "lang", "enabled"], ({ token, port, lang: savedLang, enabled }) => {
   if (token) $("token").value = token;
   if (port) $("port").value = port;
   lang = savedLang || "tr";
   $("lang").value = lang;
+  $("enabled").checked = !!enabled;
   render();
 });
 refresh();
 
-$("connect").onclick = () => {
-  const token = $("token").value.trim().toUpperCase();
-  const port = Number($("port").value) || 8791;
-  if (!token) {
-    $("status").textContent = t(lang, "statusEnterToken");
-    return;
-  }
-  chrome.storage.local.set({ token, port }, () => chrome.runtime.sendMessage({ type: "reconnect" }));
-  status = { ...status, justSaved: true };
-  render();
-  setTimeout(() => {
-    status = { ...status, justSaved: false };
-    render();
-  }, 1500);
-  setTimeout(refresh, 400);
-};
-
-$("disconnect").onclick = () => {
-  chrome.storage.local.remove("token", () => {
-    $("token").value = "";
-    refresh();
-  });
+$("enabled").onchange = () => {
+  chrome.storage.local.set({ enabled: $("enabled").checked });
+  refresh();
 };
 
 $("lang").onchange = () => {
   lang = $("lang").value;
   chrome.storage.local.set({ lang });
   render();
+};
+
+$("port").onchange = () => {
+  chrome.storage.local.set({ port: Number($("port").value) || 8791 });
 };
 
 setInterval(refresh, 1500);

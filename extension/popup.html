@@ -7,13 +7,22 @@
     header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #111318; color: #ffc23a; font-weight: 700; }
     .dot { width: 9px; height: 9px; border-radius: 50%; background: #666; }
     .dot.on { background: #3fb950; }
-    main { padding: 12px; display: grid; gap: 8px; }
+    main { padding: 12px; display: grid; gap: 10px; }
+    .switch-row { display: flex; justify-content: space-between; align-items: center; }
+    .switch-row > span:first-child { font-weight: 600; }
+    .switch { position: relative; width: 44px; height: 24px; flex: none; }
+    .switch input { display: none; }
+    .slider { position: absolute; inset: 0; background: #ccc; border-radius: 12px; transition: .2s; cursor: pointer; }
+    .slider::before { content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; box-shadow: 0 1px 2px rgb(0 0 0 / .25); }
+    .switch input:checked + .slider { background: #1a7f37; }
+    .switch input:checked + .slider::before { transform: translateX(20px); }
+    .status { font-size: 12px; color: #666; min-height: 16px; }
     label { font-size: 11px; color: #666; display: block; margin-bottom: 2px; }
     input, select { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font: inherit; background: #fff; }
-    #token { text-transform: uppercase; }
-    button { padding: 7px 10px; border: 0; border-radius: 6px; background: #111318; color: #fff; font: inherit; cursor: pointer; }
-    button.close { background: #8b1d1d; }
-    .status { font-size: 12px; color: #666; min-height: 16px; font-weight: 400; }
+    #token { text-transform: uppercase; color: #555; }
+    details { font-size: 12px; }
+    summary { color: #888; cursor: pointer; }
+    details > div { margin-top: 8px; display: grid; gap: 8px; }
     .activity { margin: 0; padding: 0 12px 12px; list-style: none; font-size: 11px; color: #555; max-height: 140px; overflow: auto; }
     .activity li { padding: 2px 0; border-top: 1px solid #eee; }
     .heading { font-size: 11px; color: #888; padding: 0 12px; text-transform: uppercase; letter-spacing: .04em; }
@@ -22,13 +31,9 @@
 <body>
   <header><span class="dot" id="dot"></span> Agent Bridge <span id="status" class="status"></span></header>
   <main>
-    <div>
-      <label for="token" id="token-label"></label>
-      <input id="token" placeholder="XXXX-XXXX" autocomplete="off" spellcheck="false" />
-    </div>
-    <div>
-      <label for="port" id="port-label"></label>
-      <input id="port" type="number" value="8791" />
+    <div class="switch-row">
+      <span id="access-label"></span>
+      <label class="switch"><input type="checkbox" id="enabled" /><span class="slider"></span></label>
     </div>
     <div>
       <label for="lang" id="lang-label"></label>
@@ -37,8 +42,19 @@
         <option value="en">English</option>
       </select>
     </div>
-    <button id="connect"></button>
-    <button id="disconnect" class="close" hidden></button>
+    <details>
+      <summary id="advanced-label"></summary>
+      <div>
+        <div>
+          <label for="port" id="port-label"></label>
+          <input id="port" type="number" value="8791" />
+        </div>
+        <div>
+          <label for="token" id="token-label"></label>
+          <input id="token" readonly placeholder="—" spellcheck="false" />
+        </div>
+      </div>
+    </details>
   </main>
   <p class="heading" id="activity-heading"></p>
   <ul class="activity" id="activity"></ul>
