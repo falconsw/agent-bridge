@@ -122,8 +122,8 @@ const argsKisa = (args) => {
 };
 
 function tekrarBaglan() {
-  rozet(yenidenDeneme > 6 ? "—" : "…", "#9a6700");
-  const bekle = Math.min(15000, 1000 * ++yenidenDeneme);
+  rozet("…", "#9a6700");
+  const bekle = Math.min(3000, 500 * ++yenidenDeneme);
   clearTimeout(baglan.zamanlayici);
   baglan.zamanlayici = setTimeout(baglan, bekle);
 }
