@@ -134,7 +134,7 @@ async function evaluate(tabId, expression, fallback) {
     if (reply.exceptionDetails) throw new Error(reply.exceptionDetails.exception?.description || T("pageScriptFailed"));
     return reply.result?.value ?? null;
   } catch (e) {
-    return fallback ?? { ok: true, note: "sayfa değişti / page navigated" };
+    return fallback ?? { ok: true, note: "sayfa değişti / page navigated", detay: String(e.message || e).slice(0, 200) };
   }
 }
 
@@ -150,7 +150,7 @@ const TREE_FN = `(root) => {
   window.__abRefs || (window.__abRefs = { map: new Map(), rev: new WeakMap(), n: 0 });
   const refs = window.__abRefs;
   const refFor = (el) => { let r = refs.rev.get(el); if (r === undefined) { r = ++refs.n; refs.rev.set(el, r); refs.map.set(r, el); } return r; };
-  const roleOf = (el) => { const explicit = el.getAttribute("role"); if (explicit) return explicit; const map = ${ROLE_MAP}; const byTag = map[el.tagName.toLowerCase()]; if (byTag === "textbox" && ${SENSITIVE_CHECK}(el)) return null; return byTag || null; };
+  const roleOf = (el) => { const explicit = el.getAttribute("role"); if (explicit) return explicit; const map = ${ROLE_MAP}; const byTag = map[el.tagName.toLowerCase()]; if (byTag === "textbox" && (${SENSITIVE_CHECK})(el)) return null; return byTag || null; };
   const labelOf = (el) => (el.innerText || el.value || el.placeholder || el.getAttribute("aria-label") || el.getAttribute("alt") || el.getAttribute("title") || "").trim().replace(/\\s+/g, " ").slice(0, 90);
   const lines = [];
   const started = Date.now();
