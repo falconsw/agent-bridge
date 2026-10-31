@@ -77,9 +77,30 @@ async function resolveTab(args) {
   return myTabs[myTabs.length - 1];
 }
 
+// Claude-style visible marker: golden frame on the page + 🤖 prefix in the tab title,
+// so the user always sees which tab the agent is working in.
+const MARK_SCRIPT = `(() => {
+  if (window.__agentBridge) return;
+  window.__agentBridge = 1;
+  const add = () => {
+    if (document.getElementById("__agent-bridge-frame")) return;
+    const frame = document.createElement("div");
+    frame.id = "__agent-bridge-frame";
+    frame.style.cssText = "position:fixed;inset:0;pointer-events:none;border:3px solid #ffc23a;z-index:2147483647;box-sizing:border-box";
+    (document.body || document.documentElement).appendChild(frame);
+    if (!/^🤖/.test(document.title)) document.title = "🤖 " + document.title;
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", add);
+  else add();
+})()`;
+
 async function attachDebugger(tabId) {
   if (attached.has(tabId)) return;
   await chrome.debugger.attach({ tabId }, "1.3");
+  await chrome.debugger.sendCommand({ tabId }, "Page.enable").catch(() => {});
+  // Re-mark on every future navigation of this tab, and mark the current page now.
+  await chrome.debugger.sendCommand({ tabId }, "Page.addScriptToEvaluateOnNewDocument", { source: MARK_SCRIPT }).catch(() => {});
+  await chrome.debugger.sendCommand({ tabId }, "Runtime.evaluate", { expression: MARK_SCRIPT }).catch(() => {});
   await chrome.debugger.sendCommand({ tabId }, "Runtime.enable").catch(() => {});
   attached.add(tabId);
 }
@@ -239,6 +260,7 @@ async function handleCommand(cmd, args = {}) {
         myTabs.push(tab.id);
         await saveMyTabs();
       }
+      await attachDebugger(tab.id); // mark the agent tab right away (frame + 🤖 title)
       refreshBadge();
       return { tabId: tab.id, url: args.url };
     }
