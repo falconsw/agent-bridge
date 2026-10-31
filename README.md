@@ -44,9 +44,9 @@ claude mcp add agent-bridge -- node /tam/yol/agent-bridge/bin/agent-bridge.mjs
 | Araç | İş |
 | --- | --- |
 | `tabs` | Agent'in kendi sekmelerini listeler (kullanıcı sekmeleri görünmez) |
-| `read` | Başlık, adres, görünür metin + **indeksli tıklanabilir öğe envanteri** |
-| `click` | Seçici, öğe indeksi ya da metinle tıklar |
-| `type` | Alana yazar (contenteditable dahil); `pressEnter` seçeneği |
+| `read` | **Erişilebilirlik ağacı**: semantik roller + `#rN` referansları + kısa metin |
+| `click` | `#rN` referansıyla **gerçek fare tıklaması** (CDP Input); yanıt yeni sayfa durumunu içerir |
+| `type` | **Gerçek klavye girdisi** (`Input.insertText`, IME/React uyumlu); `pressEnter` seçeneği |
 | `navigate` | Agent sekmesinde adrese gider; gerekirse yeni agent sekmesi açar |
 | `screenshot` | PNG kaydeder ve döndürür |
 | `eval` | Sayfada JavaScript çalıştırır (dikkatli) |
@@ -66,6 +66,8 @@ npm test                                          # 2. uç (MCP istemcisi)
 ## Güvenlik
 
 - **Sekme yalıtımı:** agent yalnız **kendi açtığı sekmelerde** çalışır; kullanıcının sekmelerini listeleyemez, onlara gezinemez, tıklayamaz. Bir işe başlamak zorunda olduğu sekme her zaman `navigate` ile agent'in kendi sekmesidir.
+- **Gizlilik filtresi:** şifre, gizli ve otomatik doldurma duyarlı alanlar (kredi kartı, OTP) anlık görüntüde **hiç görünmez** — model onları asla göremez.
+- **Engellenen adres kalıpları:** popup > Gelişmiş'e virgülle yazın (ör. `banka.example.com/*, *.gov.tr/*`); `navigate` o adresleri reddeder.
 - **Bekleme modu:** agent `done` aracını çağırınca ya da 10 dakika işlem olmayınca tüm agent sekmeleri kapanır, debugger ayrılır (sarı çubuk gider) ve köprü boşa düşer. Sonraki iş yine temiz bir sekmeyle başlar.
 - Köprü yalnız `127.0.0.1` dinler; eşleşme token'la yapılır. Token'ı bilen her yerel süreç tarayıcıyı sürebilir — tek kullanıcılı makinede sınır budur (her yerel geliştirme aracında olduğu gibi).
 - `chrome.debugger` kullandığı için eklenen sekmede Chrome'un "**... tarafından hataları ayıklanıyor**" çubuğu görünür; görmeniz bilerek böyle — ne zaman devrede olduğunu gösterir.

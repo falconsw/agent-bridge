@@ -26,11 +26,14 @@ const connect = () => {
         return reply(true, {
           title: "Example Page",
           url: "https://example.com/",
+          tree: [
+            'heading "Example Domain" #r1',
+            'link "More information..." #r2',
+          ],
           text: "Hello world. This is a test page.",
-          elements: [{ i: 0, tag: "a", label: "More information...", type: "", href: "https://www.iana.org/domains/example" }],
         });
       case "click":
-        return reply(true, { ok: true, clicked: "More information...", title: "Example Page", url: "https://example.com/", elements: [] });
+        return reply(true, { ok: true, clicked: true, title: "Example Page", url: "https://example.com/", elements: ['link "More information..." #r2'] });
       case "type":
         return reply(true, { ok: true, title: "Example Page", url: "https://example.com/", elements: [] });
       case "navigate":

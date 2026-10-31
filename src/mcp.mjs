@@ -28,7 +28,7 @@ export async function startMcp({ shotsDir }) {
   const targetArgs = {
     tabId: z.number().optional().describe("Tab id (defaults to the newest agent tab)"),
     selector: z.string().optional().describe("CSS selector"),
-    index: z.number().optional().describe("Element index from the read output"),
+    ref: z.number().optional().describe("Element ref #rN from the read tree"),
   };
 
   server.registerTool("read", {
@@ -36,16 +36,13 @@ export async function startMcp({ shotsDir }) {
     description: t("descRead"),
     inputSchema: {
       tabId: z.number().optional().describe("Tab id (defaults to the newest agent tab)"),
-      selector: z.string().optional().describe("Read only this element's text (CSS selector)"),
-      maxChars: z.number().optional().describe("Max text length (default 1500)"),
+      selector: z.string().optional().describe("Read only this element's scope (CSS selector)"),
+      maxText: z.number().optional().describe("Max plain-text length (default 800)"),
     },
   }, async (args) => {
     try {
       const data = await request("read", args);
-      const elements = (data.elements ?? [])
-        .map((o) => `[${o.i}] <${o.tag}${o.type ? " " + o.type : ""}> ${o.label}${o.href ? " → " + o.href : ""}`)
-        .join("\n");
-      return text(`# ${data.title}\n${data.url}\n\n${data.text}\n\n${t("clickable")}\n${elements}`);
+      return text(`# ${data.title}\n${data.url}\n\n${t("treeHeading")}\n${(data.tree ?? []).join("\n")}\n\n${t("textHeading")}\n${data.text ?? ""}`);
     } catch (e) {
       return fail(e);
     }

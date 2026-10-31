@@ -12,6 +12,7 @@ function render() {
   $("advanced-label").textContent = T("advanced");
   $("port-label").textContent = T("portLabel");
   $("token-label").textContent = T("tokenField");
+  $("blocked-label").textContent = T("blockedLabel");
   $("activity-heading").textContent = T("recentActions");
 
   if (status) {
@@ -42,8 +43,9 @@ function refresh() {
   });
 }
 
-chrome.storage.local.get(["token", "port", "lang", "enabled"], ({ token, port, lang: savedLang, enabled }) => {
+chrome.storage.local.get(["token", "port", "lang", "enabled", "blockPatterns"], ({ token, port, lang: savedLang, enabled, blockPatterns }) => {
   if (token) $("token").value = token;
+  if (blockPatterns?.length) $("blocked").value = blockPatterns.join(", ");
   if (port) $("port").value = port;
   lang = savedLang || "tr";
   $("lang").value = lang;
@@ -65,6 +67,11 @@ $("lang").onchange = () => {
 
 $("port").onchange = () => {
   chrome.storage.local.set({ port: Number($("port").value) || 8791 });
+};
+
+$("blocked").onchange = () => {
+  const patterns = $("blocked").value.split(",").map((p) => p.trim()).filter(Boolean);
+  chrome.storage.local.set({ blockPatterns: patterns });
 };
 
 setInterval(refresh, 1500);
