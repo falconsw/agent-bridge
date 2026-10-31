@@ -22,19 +22,17 @@ const connect = () => {
     switch (msg.cmd) {
       case "tabs":
         return reply(true, [{ id: 1, title: "Example Page", url: "https://example.com/", active: true }]);
-      case "eval": {
-        const script = msg.args.expression;
-        if (script.includes("elements,"))
-          return reply(true, {
-            title: "Example Page",
-            url: "https://example.com/",
-            text: "Hello world. This is a test page.",
-            elements: [{ i: 0, tag: "a", label: "More information...", type: "", href: "https://www.iana.org/domains/example" }],
-          });
-        if (script.includes(".click()")) return reply(true, { ok: true, clicked: "More information..." });
-        if (script.includes("insertText")) return reply(true, { ok: true });
-        return reply(true, { ok: true });
-      }
+      case "read":
+        return reply(true, {
+          title: "Example Page",
+          url: "https://example.com/",
+          text: "Hello world. This is a test page.",
+          elements: [{ i: 0, tag: "a", label: "More information...", type: "", href: "https://www.iana.org/domains/example" }],
+        });
+      case "click":
+        return reply(true, { ok: true, clicked: "More information...", title: "Example Page", url: "https://example.com/", elements: [] });
+      case "type":
+        return reply(true, { ok: true, title: "Example Page", url: "https://example.com/", elements: [] });
       case "navigate":
         return reply(true, { tabId: 1, url: msg.args.url });
       case "screenshot":

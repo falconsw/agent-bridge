@@ -99,6 +99,48 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   }
 });
 
+// Page script: indexes visible interactive elements; read/click/type share the same order.
+const INVENTORY = `
+  (() => {
+    const visible = (e) => {
+      const r = e.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== "hidden";
+    };
+    return [...document.querySelectorAll("a,button,input,select,textarea,[role=button],[contenteditable=true]")]
+      .map((e, i) => ({ e, i }))
+      .filter(({ e }) => visible(e))
+      .map(({ e, i }) => ({
+        i,
+        tag: e.tagName.toLowerCase(),
+        label: (e.innerText || e.value || e.placeholder || e.getAttribute("aria-label") || "").trim().slice(0, 80),
+        type: e.type || "",
+        href: e.href ? e.href.slice(0, 120) : undefined,
+      }));
+  })()
+`;
+
+/** Runs a page script and returns its value; resolves to a navigation notice if the page changed underneath. */
+async function evaluate(tabId, expression, fallback) {
+  await attachDebugger(tabId);
+  try {
+    const reply = await chrome.debugger.sendCommand({ tabId }, "Runtime.evaluate", {
+      expression,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (reply.exceptionDetails) throw new Error(reply.exceptionDetails.exception?.description || T("pageScriptFailed"));
+    return reply.result?.value ?? null;
+  } catch (e) {
+    // The tab navigated between finding the element and reading state: not fatal.
+    return fallback ?? { ok: true, note: "sayfa değişti / page navigated" };
+  }
+}
+
+const stateScript = `(async () => {
+  await new Promise((y) => setTimeout(y, 800));
+  return { title: document.title, url: location.href, elements: ${INVENTORY}.slice(0, 15) };
+})()`;
+
 async function handleCommand(cmd, args = {}) {
   await loadMyTabs();
   switch (cmd) {
@@ -108,16 +150,84 @@ async function handleCommand(cmd, args = {}) {
       )
         .filter(Boolean)
         .map((tab) => ({ id: tab.id, title: tab.title, url: tab.url, active: tab.active }));
+    case "read": {
+      const tabId = await resolveTab(args);
+      const { selector, maxChars = 1500 } = args;
+      return await evaluate(
+        tabId,
+        `(() => {
+          const ARGS = ${JSON.stringify({ selector, maxChars })};
+          const target = ARGS.selector ? document.querySelector(ARGS.selector) : null;
+          return {
+            title: document.title,
+            url: location.href,
+            text: (target ?? document.body).innerText.slice(0, ARGS.maxChars),
+            elements: ${INVENTORY},
+          };
+        })()`,
+      );
+    }
+    case "click": {
+      const tabId = await resolveTab(args);
+      const value = await evaluate(
+        tabId,
+        `(async () => {
+          const ARGS = ${JSON.stringify({ selector: args.selector, index: args.index, text: args.text, notFound: T("elementNotFound") })};
+          const elements = ${INVENTORY};
+          let el = null;
+          if (ARGS.index !== undefined) el = elements.find(o => o.i === ARGS.index)?.e ?? elements[ARGS.index]?.e;
+          else if (ARGS.selector) el = document.querySelector(ARGS.selector);
+          else if (ARGS.text) {
+            const needle = ARGS.text.toLocaleLowerCase();
+            el = elements.map(o => o.e).find(e => (e.innerText || e.value || e.placeholder || e.getAttribute("aria-label") || "").toLocaleLowerCase().includes(needle));
+          }
+          if (!el) return { ok: false, error: ARGS.notFound };
+          el.scrollIntoView({ block: "center" });
+          el.click();
+          await new Promise((y) => setTimeout(y, 800));
+          return { ok: true, clicked: (el.innerText || el.value || el.tagName).slice(0, 60), title: document.title, url: location.href, elements: ${INVENTORY}.slice(0, 15) };
+        })()`,
+      );
+      return value;
+    }
+    case "type": {
+      const tabId = await resolveTab(args);
+      const value = await evaluate(
+        tabId,
+        `(async () => {
+          const ARGS = ${JSON.stringify({ selector: args.selector, index: args.index, text: args.text, clear: args.clear !== false, pressEnter: !!args.pressEnter, notFound: T("noFieldFound") })};
+          const elements = ${INVENTORY};
+          let el = null;
+          if (ARGS.index !== undefined) el = elements.find(o => o.i === ARGS.index)?.e ?? elements[ARGS.index]?.e;
+          else if (ARGS.selector) el = document.querySelector(ARGS.selector);
+          if (!el) { el = document.activeElement; }
+          if (!el) return { ok: false, error: ARGS.notFound };
+          el.focus();
+          if (el.isContentEditable) {
+            if (ARGS.clear) document.execCommand("selectAll", false, null);
+            document.execCommand("insertText", false, ARGS.text);
+            if (ARGS.pressEnter) document.execCommand("insertLineBreak");
+          } else {
+            const value = (ARGS.clear ? "" : el.value) + ARGS.text;
+            const descriptor = Object.getOwnPropertyDescriptor(el.constructor.prototype, "value");
+            if (descriptor && descriptor.set) descriptor.set.call(el, value);
+            else el.value = value;
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+            if (ARGS.pressEnter) {
+              el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", keyCode: 13, bubbles: true }));
+              el.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", keyCode: 13, bubbles: true }));
+            }
+          }
+          await new Promise((y) => setTimeout(y, 800));
+          return { ok: true, title: document.title, url: location.href, elements: ${INVENTORY}.slice(0, 15) };
+        })()`,
+      );
+      return value;
+    }
     case "eval": {
       const tabId = await resolveTab(args);
-      await attachDebugger(tabId);
-      const reply = await chrome.debugger.sendCommand({ tabId }, "Runtime.evaluate", {
-        expression: args.expression,
-        returnByValue: true,
-        awaitPromise: true,
-      });
-      if (reply.exceptionDetails) throw new Error(reply.exceptionDetails.exception?.description || T("pageScriptFailed"));
-      return reply.result?.value ?? null;
+      return await evaluate(tabId, args.expression);
     }
     case "navigate": {
       if (args.tabId !== undefined && !myTabs.includes(args.tabId)) throw new Error(T("tabNotOwned"));
