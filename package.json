@@ -1,0 +1,23 @@
+{
+  "name": "agent-bridge",
+  "version": "0.1.0",
+  "description": "Terminal agentlarına (MCP) Chrome üzerinde işlem yaptıran köprü: Chrome eklentisi + yerel WebSocket + MCP sunucusu",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "node test/mcp-client.mjs"
+  },
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "ws": "^8.22.1"
+  },
+  "devDependencies": {
+    "zod": "^4.6.7"
+  },
+  "bin": {
+    "agent-bridge": "bin/agent-bridge.mjs"
+  }
+}

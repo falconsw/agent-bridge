@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { width: 280px; margin: 0; font: 13px/1.4 system-ui, sans-serif; color: #111318; }
+    header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #111318; color: #ffc23a; font-weight: 700; }
+    .nokta { width: 9px; height: 9px; border-radius: 50%; background: #666; }
+    .nokta.acik { background: #3fb950; }
+    main { padding: 12px; display: grid; gap: 8px; }
+    label { font-size: 11px; color: #666; display: block; margin-bottom: 2px; }
+    input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font: inherit; text-transform: uppercase; }
+    #port { text-transform: none; }
+    button { padding: 7px 10px; border: 0; border-radius: 6px; background: #111318; color: #fff; font: inherit; cursor: pointer; }
+    button.kapat { background: #8b1d1d; }
+    .durum { font-size: 12px; color: #666; min-height: 16px; }
+    .etkinlik { margin: 0; padding: 0 12px 12px; list-style: none; font-size: 11px; color: #555; max-height: 140px; overflow: auto; }
+    .etkinlik li { padding: 2px 0; border-top: 1px solid #eee; }
+    .baslik { font-size: 11px; color: #888; padding: 0 12px; text-transform: uppercase; letter-spacing: .04em; }
+  </style>
+</head>
+<body>
+  <header><span class="nokta" id="nokta"></span> Agent Bridge <span id="durum" class="durum"></span></header>
+  <main>
+    <div>
+      <label for="token">Köprü token'ı (agent-bridge çıktısından)</label>
+      <input id="token" placeholder="XXXX-XXXX" autocomplete="off" spellcheck="false" />
+    </div>
+    <div>
+      <label for="port">Port</label>
+      <input id="port" type="number" value="8791" />
+    </div>
+    <button id="baglan">Bağlan</button>
+    <button id="kapat" class="kapat" hidden>Bağlantıyı kes</button>
+  </main>
+  <p class="baslik">Son işlemler</p>
+  <ul class="etkinlik" id="etkinlik"></ul>
+  <script src="popup.js"></script>
+</body>
+</html>
