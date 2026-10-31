@@ -1,6 +1,6 @@
 // Extension-side strings (Turkish / English). Keep the keys in sync with src/i18n.mjs.
 // The language is chosen in the popup and stored in chrome.storage.local.lang (default "tr").
-export const dicts = {
+const dicts = {
   tr: {
     badgeOn: "AÇIK",
     connectedLog: "bağlandı",
@@ -16,7 +16,6 @@ export const dicts = {
     unknownCommand: "bilinmeyen komut: {cmd}",
     pageScriptFailed: "sayfa betiği hata verdi",
     tabLabel: "sekme {id}",
-    tokenLabel: "Köprü token'ı (agent-bridge çıktısından)",
     agentAccess: "Agent erişimi",
     statusOff: "kapalı — anahtarı aç",
     advanced: "Gelişmiş",
@@ -24,14 +23,6 @@ export const dicts = {
     toggleOff: "anahtar kapandı",
     portLabel: "Port",
     languageLabel: "Dil",
-    connectBtn: "Bağlan",
-    disconnectBtn: "Bağlantıyı kes",
-    savedBtn: "Kaydedildi ✓",
-    statusConnectedIdle: "bağlı · boşta",
-    statusConnectedTabs: "bağlı · {n} agent sekmesi",
-    statusWaiting: "köprü bekleniyor…",
-    statusNoToken: "token yok",
-    statusEnterToken: "önce token gir",
     recentActions: "Son işlemler",
     nothingYet: "henüz işlem yok",
   },
@@ -50,7 +41,6 @@ export const dicts = {
     unknownCommand: "unknown command: {cmd}",
     pageScriptFailed: "page script failed",
     tabLabel: "tab {id}",
-    tokenLabel: "Bridge token (from agent-bridge output)",
     agentAccess: "Agent access",
     statusOff: "off — flip the switch",
     advanced: "Advanced",
@@ -58,21 +48,20 @@ export const dicts = {
     toggleOff: "toggle turned off",
     portLabel: "Port",
     languageLabel: "Language",
-    connectBtn: "Connect",
-    disconnectBtn: "Disconnect",
-    savedBtn: "Saved ✓",
-    statusConnectedIdle: "connected · idle",
-    statusConnectedTabs: "connected · {n} agent tab(s)",
-    statusWaiting: "waiting for bridge…",
-    statusNoToken: "no token",
-    statusEnterToken: "enter the token first",
     recentActions: "Recent actions",
     nothingYet: "nothing yet",
   },
 };
 
-export function t(lang, key, vars = {}) {
-  let text = dicts[lang]?.[key] ?? dicts.en[key] ?? key;
+let current = "tr";
+
+export const setLang = (lang) => {
+  if (dicts[lang]) current = lang;
+};
+export const getLang = () => current;
+
+export function t(key, vars = {}) {
+  let text = dicts[current][key] ?? dicts.en[key] ?? key;
   for (const [name, value] of Object.entries(vars)) text = text.replaceAll(`{${name}}`, String(value));
   return text;
 }

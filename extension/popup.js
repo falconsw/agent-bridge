@@ -1,18 +1,18 @@
-import { t } from "./i18n.js";
+import { t, setLang } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
 let lang = "tr";
 let status = null;
 
 function render() {
-  const T = (key, vars) => t(lang, key, vars);
+  setLang(lang);
+  const T = (key, vars) => t(key, vars);
   $("access-label").textContent = T("agentAccess");
   $("lang-label").textContent = T("languageLabel");
   $("advanced-label").textContent = T("advanced");
   $("port-label").textContent = T("portLabel");
   $("token-label").textContent = T("tokenField");
   $("activity-heading").textContent = T("recentActions");
-  $("enabled").checked = !!status?.enabled;
 
   if (status) {
     $("dot").classList.toggle("on", status.open);

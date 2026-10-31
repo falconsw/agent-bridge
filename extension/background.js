@@ -19,7 +19,7 @@ let retries = 0;
 let activity = []; // recent actions (shown in the popup)
 let idleTimer = null;
 
-const T = (key, vars) => t(lang, key, vars);
+const T = (key, vars) => t(key, vars);
 
 function makeToken() {
   // Readable pairing token without ambiguous characters (0/O, 1/I); mirrors src/bridge.mjs.
