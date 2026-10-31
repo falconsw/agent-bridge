@@ -19,11 +19,13 @@ function makeToken() {
 export function startBridge({ port = 8791, token: fixed } = {}) {
   const token = fixed || makeToken();
   wss = new WebSocketServer({ host: "127.0.0.1", port });
+  const drivers = new Set(); // live drivers: authenticated sockets that send commands but are not the extension
   return new Promise((resolve, reject) => {
     wss.on("error", reject);
     wss.on("listening", () => resolve(token));
     wss.on("connection", (socket) => {
       let authenticated = false;
+      let role = "extension";
       socket.on("message", (raw) => {
         let msg;
         try {
@@ -34,13 +36,25 @@ export function startBridge({ port = 8791, token: fixed } = {}) {
         if (!authenticated) {
           if (msg.type === "hello" && msg.token === token) {
             authenticated = true;
-            ext?.close();
-            ext = socket;
-            console.error(t("extConnected", { chrome: msg.chrome ?? "?" }));
+            role = msg.role === "driver" ? "driver" : "extension";
+            if (role === "extension") {
+              ext?.close();
+              ext = socket;
+              console.error(t("extConnected", { chrome: msg.chrome ?? "?" }));
+            } else {
+              drivers.add(socket);
+            }
             socket.send(JSON.stringify({ type: "ready" }));
           } else {
             socket.close(4001, "invalid token");
           }
+          return;
+        }
+        if (role === "driver" && msg.id && msg.cmd) {
+          // Live driver: proxy a single command to the extension.
+          request(msg.cmd, msg.args ?? {})
+            .then((data) => socket.send(JSON.stringify({ id: msg.id, ok: true, data })))
+            .catch((e) => socket.send(JSON.stringify({ id: msg.id, ok: false, error: e.message })));
           return;
         }
         // Reply to a request: { id, ok, data } | { id, ok: false, error }
@@ -52,6 +66,7 @@ export function startBridge({ port = 8791, token: fixed } = {}) {
         else waiting.reject(new Error(msg.error || t("extError")));
       });
       socket.on("close", () => {
+        drivers.delete(socket);
         if (ext === socket) {
           ext = null;
           console.error(t("extDisconnected"));

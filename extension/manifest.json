@@ -4,6 +4,7 @@
   "version": "0.2.1",
   "description": "Terminal agent'larının (MCP üzerinden) bu tarayıcıda işlem yapmasını sağlar: okuma, tıklama, yazma, ekran görüntüsü. Yalnız localhost'a bağlanır, token ile eşleşir.",
   "permissions": [
+    "alarms",
     "debugger",
     "tabs",
     "storage"

@@ -201,6 +201,17 @@ function reconnect() {
   connect.timer = setTimeout(connect, wait);
 }
 
+// Self-heal: if the service worker slept while the bridge was down, this hourly
+// heartbeat would be too slow — a 1-minute alarm wakes it so a freshly started
+// bridge is picked up without any user interaction.
+chrome.alarms.create("findBridge", { periodInMinutes: 1 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "findBridge" && ws?.readyState !== 1) {
+    retries = 0;
+    connect();
+  }
+});
+
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && (changes.token || changes.port || changes.lang)) {
     ws?.close();
