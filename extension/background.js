@@ -161,6 +161,12 @@ function connect() {
     ws.onopen = () => {
       retries = 0;
       ws.send(JSON.stringify({ type: "hello", token, chrome: navigator.userAgent.match(/Chrome\/([\d.]+)/)?.[1] }));
+      // Heartbeat: WS traffic keeps the service worker alive while connected; a silent
+      // socket would let Chrome suspend the worker and drop the connection.
+      clearInterval(connect.heartbeat);
+      connect.heartbeat = setInterval(() => {
+        if (ws?.readyState === 1) ws.send(JSON.stringify({ type: "ping" }));
+      }, 20_000);
     };
     ws.onmessage = async (event) => {
       let msg;
@@ -184,7 +190,10 @@ function connect() {
         ws.send(JSON.stringify({ id: msg.id, ok: false, error: String(e.message || e) }));
       }
     };
-    ws.onclose = reconnect;
+    ws.onclose = () => {
+      clearInterval(connect.heartbeat);
+      reconnect();
+    };
     ws.onerror = () => ws?.close();
   });
 }
