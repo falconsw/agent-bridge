@@ -3,18 +3,22 @@
 // SECURITY: the agent only ever sees and uses tabs IT opened; it cannot see or touch
 // the user's own tabs. When the work is done (done tool / 10 minutes without a command)
 // the agent tabs are closed, the debugger detaches and the bridge goes back to idle.
+import { t, setLang } from "./i18n.js";
 
 const DEFAULT_PORT = 8791;
 const IDLE_TIMEOUT = 10 * 60 * 1000; // close agent tabs after 10 min without a command
 let ws = null;
 let token = "";
 let port = DEFAULT_PORT;
+let lang = "tr";
 let attached = new Set(); // tabs with an active debugger session
 let myTabs = []; // tabs the agent opened (ordered: newest last)
 let myTabsLoaded = false;
 let retries = 0;
 let activity = []; // recent actions (shown in the popup)
 let idleTimer = null;
+
+const T = (key, vars) => t(lang, key, vars);
 
 const setBadge = (text, color = "#1a7f37") => {
   chrome.action.setBadgeText({ text });
@@ -34,7 +38,7 @@ async function loadMyTabs() {
   myTabsLoaded = true;
 }
 const saveMyTabs = () => chrome.storage.session.set({ agentTabs: myTabs });
-const refreshBadge = () => setBadge(ws?.readyState === 1 ? (myTabs.length ? "ON" : "") : "…", "#1a7f37");
+const refreshBadge = () => setBadge(ws?.readyState === 1 ? (myTabs.length ? T("badgeOn") : "") : "…", "#1a7f37");
 
 // --- idle mode: close tabs, detach debugger ---
 async function cleanup(reason) {
@@ -46,22 +50,22 @@ async function cleanup(reason) {
     await chrome.debugger.detach({ tabId: id }).catch(() => {});
     await chrome.tabs.remove(id).catch(() => {});
   }
-  logAction("bekleme modu / idle", `${reason} · ${list.length} sekme kapandı / tabs closed`);
+  logAction(T("idleMode"), `${reason} · ${T("tabsClosed", { n: list.length })}`);
   refreshBadge();
 }
 const armIdleTimer = () => {
   clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => cleanup("10 dk işlem olmadı / no command for 10 min"), IDLE_TIMEOUT);
+  idleTimer = setTimeout(() => cleanup(T("noCommand10")), IDLE_TIMEOUT);
 };
 
 // --- target tab: only agent-owned ones ---
 async function resolveTab(args) {
   await loadMyTabs();
   if (args.tabId !== undefined) {
-    if (!myTabs.includes(args.tabId)) throw new Error("bu sekme agent'e ait değil / tab does not belong to the agent (it only works in tabs it opened)");
+    if (!myTabs.includes(args.tabId)) throw new Error(T("tabNotOwned"));
     return args.tabId;
   }
-  if (!myTabs.length) throw new Error("açık agent sekmesi yok / no open agent tab — önce navigate ile bir sekme aç / open one with navigate first");
+  if (!myTabs.length) throw new Error(T("noAgentTab"));
   return myTabs[myTabs.length - 1];
 }
 
@@ -74,7 +78,7 @@ async function attachDebugger(tabId) {
 
 chrome.debugger.onDetach.addListener(({ tabId }) => {
   attached.delete(tabId);
-  logAction("debugger ayrıldı / detached", tabId ? `tab ${tabId}` : "");
+  logAction(T("debuggerDetached"), tabId ? T("tabLabel", { id: tabId }) : "");
 });
 
 chrome.tabs.onRemoved.addListener(async (tabId) => {
@@ -95,7 +99,7 @@ async function handleCommand(cmd, args = {}) {
         await Promise.all(myTabs.map((id) => chrome.tabs.get(id).catch(() => null)))
       )
         .filter(Boolean)
-        .map((t) => ({ id: t.id, title: t.title, url: t.url, active: t.active }));
+        .map((tab) => ({ id: tab.id, title: tab.title, url: tab.url, active: tab.active }));
     case "eval": {
       const tabId = await resolveTab(args);
       await attachDebugger(tabId);
@@ -104,11 +108,11 @@ async function handleCommand(cmd, args = {}) {
         returnByValue: true,
         awaitPromise: true,
       });
-      if (reply.exceptionDetails) throw new Error(reply.exceptionDetails.exception?.description || "page script failed / sayfa betiği hata verdi");
+      if (reply.exceptionDetails) throw new Error(reply.exceptionDetails.exception?.description || T("pageScriptFailed"));
       return reply.result?.value ?? null;
     }
     case "navigate": {
-      if (args.tabId !== undefined && !myTabs.includes(args.tabId)) throw new Error("bu sekme agent'e ait değil / tab does not belong to the agent");
+      if (args.tabId !== undefined && !myTabs.includes(args.tabId)) throw new Error(T("tabNotOwned"));
       let tab;
       if (args.tabId !== undefined) tab = await chrome.tabs.update(args.tabId, { url: args.url });
       else if (myTabs.length && args.newTab !== true) tab = await chrome.tabs.update(myTabs[myTabs.length - 1], { url: args.url });
@@ -128,19 +132,21 @@ async function handleCommand(cmd, args = {}) {
       return { data: reply.data };
     }
     case "cleanup":
-      await cleanup("agent işi bitirdi / agent finished the task");
+      await cleanup(T("workDone"));
       return { closed: true, mode: "idle" };
     case "ping":
       return { pong: true };
     default:
-      throw new Error(`bilinmeyen komut / unknown command: ${cmd}`);
+      throw new Error(T("unknownCommand", { cmd }));
   }
 }
 
 function connect() {
-  chrome.storage.local.get(["token", "port"], ({ token: t, port: p }) => {
-    token = t || "";
-    port = p || DEFAULT_PORT;
+  chrome.storage.local.get(["token", "port", "lang"], ({ token: savedToken, port: savedPort, lang: savedLang }) => {
+    token = savedToken || "";
+    port = savedPort || DEFAULT_PORT;
+    lang = savedLang || "tr";
+    setLang(lang);
     if (!token) {
       setBadge("?", "#9a6700");
       return;
@@ -165,7 +171,7 @@ function connect() {
       }
       if (msg.type === "ready") {
         refreshBadge();
-        logAction("bağlandı / connected", `port ${port}${myTabs.length ? ` · ${myTabs.length} agent sekmesi` : " · boşta / idle"}`);
+        logAction(T("connectedLog"), `port ${port}${myTabs.length ? ` · ${T("agentTabsCount", { n: myTabs.length })}` : ` · ${T("idleShort")}`}`);
         return;
       }
       if (!msg.id) return; // heartbeat etc.
@@ -196,7 +202,7 @@ function reconnect() {
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && (changes.token || changes.port)) {
+  if (area === "local" && (changes.token || changes.port || changes.lang)) {
     ws?.close();
     retries = 0;
     connect();
@@ -206,7 +212,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Status query from the popup
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.type === "status") {
-    reply({ open: ws?.readyState === 1, activity, hasToken: !!token, port, myTabs: myTabs.length });
+    reply({ open: ws?.readyState === 1, activity, hasToken: !!token, port, myTabs: myTabs.length, lang });
   }
   if (msg.type === "reconnect") connect();
   return false;

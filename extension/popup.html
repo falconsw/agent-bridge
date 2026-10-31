@@ -9,11 +9,11 @@
     .dot.on { background: #3fb950; }
     main { padding: 12px; display: grid; gap: 8px; }
     label { font-size: 11px; color: #666; display: block; margin-bottom: 2px; }
-    input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font: inherit; text-transform: uppercase; }
-    #port { text-transform: none; }
+    input, select { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font: inherit; background: #fff; }
+    #token { text-transform: uppercase; }
     button { padding: 7px 10px; border: 0; border-radius: 6px; background: #111318; color: #fff; font: inherit; cursor: pointer; }
     button.close { background: #8b1d1d; }
-    .status { font-size: 12px; color: #666; min-height: 16px; }
+    .status { font-size: 12px; color: #666; min-height: 16px; font-weight: 400; }
     .activity { margin: 0; padding: 0 12px 12px; list-style: none; font-size: 11px; color: #555; max-height: 140px; overflow: auto; }
     .activity li { padding: 2px 0; border-top: 1px solid #eee; }
     .heading { font-size: 11px; color: #888; padding: 0 12px; text-transform: uppercase; letter-spacing: .04em; }
@@ -23,18 +23,25 @@
   <header><span class="dot" id="dot"></span> Agent Bridge <span id="status" class="status"></span></header>
   <main>
     <div>
-      <label for="token">Köprü token'ı / Bridge token (agent-bridge çıktısından / from agent-bridge output)</label>
+      <label for="token" id="token-label"></label>
       <input id="token" placeholder="XXXX-XXXX" autocomplete="off" spellcheck="false" />
     </div>
     <div>
-      <label for="port">Port</label>
+      <label for="port" id="port-label"></label>
       <input id="port" type="number" value="8791" />
     </div>
-    <button id="connect">Bağlan / Connect</button>
-    <button id="disconnect" class="close" hidden>Bağlantıyı kes / Disconnect</button>
+    <div>
+      <label for="lang" id="lang-label"></label>
+      <select id="lang">
+        <option value="tr">Türkçe</option>
+        <option value="en">English</option>
+      </select>
+    </div>
+    <button id="connect"></button>
+    <button id="disconnect" class="close" hidden></button>
   </main>
-  <p class="heading">Son işlemler / Recent actions</p>
+  <p class="heading" id="activity-heading"></p>
   <ul class="activity" id="activity"></ul>
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

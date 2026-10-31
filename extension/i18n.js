@@ -1,0 +1,68 @@
+// Extension-side strings (Turkish / English). Keep the keys in sync with src/i18n.mjs.
+// The language is chosen in the popup and stored in chrome.storage.local.lang (default "tr").
+export const dicts = {
+  tr: {
+    badgeOn: "AÇIK",
+    connectedLog: "bağlandı",
+    idleShort: "boşta",
+    agentTabsCount: "{n} agent sekmesi",
+    idleMode: "bekleme modu",
+    tabsClosed: "{n} sekme kapandı",
+    workDone: "agent işi bitirdi",
+    noCommand10: "10 dk işlem olmadı",
+    debuggerDetached: "debugger ayrıldı",
+    tabNotOwned: "bu sekme agent'e ait değil; agent yalnız kendi açtığı sekmelerde çalışır",
+    noAgentTab: "açık agent sekmesi yok — önce navigate ile bir sekme aç",
+    unknownCommand: "bilinmeyen komut: {cmd}",
+    pageScriptFailed: "sayfa betiği hata verdi",
+    tabLabel: "sekme {id}",
+    tokenLabel: "Köprü token'ı (agent-bridge çıktısından)",
+    portLabel: "Port",
+    languageLabel: "Dil",
+    connectBtn: "Bağlan",
+    disconnectBtn: "Bağlantıyı kes",
+    savedBtn: "Kaydedildi ✓",
+    statusConnectedIdle: "bağlı · boşta",
+    statusConnectedTabs: "bağlı · {n} agent sekmesi",
+    statusWaiting: "köprü bekleniyor…",
+    statusNoToken: "token yok",
+    statusEnterToken: "önce token gir",
+    recentActions: "Son işlemler",
+    nothingYet: "henüz işlem yok",
+  },
+  en: {
+    badgeOn: "ON",
+    connectedLog: "connected",
+    idleShort: "idle",
+    agentTabsCount: "{n} agent tab(s)",
+    idleMode: "idle",
+    tabsClosed: "{n} tab(s) closed",
+    workDone: "agent finished the task",
+    noCommand10: "no command for 10 min",
+    debuggerDetached: "debugger detached",
+    tabNotOwned: "tab does not belong to the agent; it only works in tabs it opened",
+    noAgentTab: "no open agent tab — open one with navigate first",
+    unknownCommand: "unknown command: {cmd}",
+    pageScriptFailed: "page script failed",
+    tabLabel: "tab {id}",
+    tokenLabel: "Bridge token (from agent-bridge output)",
+    portLabel: "Port",
+    languageLabel: "Language",
+    connectBtn: "Connect",
+    disconnectBtn: "Disconnect",
+    savedBtn: "Saved ✓",
+    statusConnectedIdle: "connected · idle",
+    statusConnectedTabs: "connected · {n} agent tab(s)",
+    statusWaiting: "waiting for bridge…",
+    statusNoToken: "no token",
+    statusEnterToken: "enter the token first",
+    recentActions: "Recent actions",
+    nothingYet: "nothing yet",
+  },
+};
+
+export function t(lang, key, vars = {}) {
+  let text = dicts[lang]?.[key] ?? dicts.en[key] ?? key;
+  for (const [name, value] of Object.entries(vars)) text = text.replaceAll(`{${name}}`, String(value));
+  return text;
+}
