@@ -303,6 +303,10 @@ async function handleCommand(cmd, args = {}) {
       const reply = await chrome.debugger.sendCommand({ tabId }, "Page.captureScreenshot", { format: "png" });
       return { data: reply.data };
     }
+    case "eval": {
+      const tabId = await resolveTab(args);
+      return await evaluate(tabId, args.expression);
+    }
     case "cleanup":
       await cleanup(T("workDone"));
       return { closed: true, mode: "idle" };
