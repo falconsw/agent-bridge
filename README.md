@@ -1,4 +1,6 @@
-# Agent Bridge
+<p align="center"><img src="docs/logo.svg" alt="Agent Bridge" width="120"></p>
+
+<h1 align="center">Agent Bridge</h1>
 
 **English** · [Türkçe](README.tr.md)
 

@@ -1,6 +1,6 @@
 {
   "name": "chrome-agent-bridge",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Let MCP agents (Claude Code, Cursor, Codex…) drive your real, logged-in Chrome — Chrome extension + local WebSocket bridge + MCP server",
   "scripts": {
     "test": "node test/mcp-client.mjs",

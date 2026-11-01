@@ -37,7 +37,7 @@ const CLIENT_NAMES = [
 const prettyClient = (name = "") => CLIENT_NAMES.find(([re]) => re.test(name))?.[1] ?? name;
 
 export async function startMcp({ shotsDir }) {
-  const server = new McpServer({ name: "agent-bridge", version: "0.5.1" }, { instructions: t("instructions") });
+  const server = new McpServer({ name: "agent-bridge", version: "0.5.2" }, { instructions: t("instructions") });
 
   /** Registers a tool that forwards its arguments to one extension command. */
   const tool = (name, inputSchema, { cmd = name, timeout = 30_000 } = {}) =>
