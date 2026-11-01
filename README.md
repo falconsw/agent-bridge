@@ -6,6 +6,10 @@ Let terminal agents (Claude Code, Cursor, Codex… anything that speaks MCP) wor
 
 That's the difference from Playwright / DevTools MCP, which start an empty browser with no sessions. Agent Bridge connects to the browser you already use.
 
+![An agent tab: the yellow "Agent" tab group, the gold page frame and the motion cursor](docs/screenshots/agent-tab.png)
+
+*Agent tabs are easy to spot: they sit in a yellow **Agent** tab group, the page gets a gold frame, and the motion cursor shows where the agent points and clicks.*
+
 ## How it works
 
 ```
@@ -128,10 +132,14 @@ Then click **Reload** on Agent Bridge in `chrome://extensions` and restart your 
 
 ## The popup
 
+<img src="docs/screenshots/popup-en.png" alt="Agent Bridge popup" width="300" align="right">
+
 - **Agent access:** the master switch. When it's off, the agent can't touch the browser.
 - **Motion cursor:** shows a pointer and click ripple on the page wherever the agent clicks or types.
 - **Recent actions:** a plain-language log ("Opened instagram.com", "Clicked ×3"), with a badge for the app it came from (Claude Code, Cursor, Codex…).
 - **Advanced:** port, pairing token, and blocked URL patterns.
+
+<br clear="right">
 
 ## Tools
 

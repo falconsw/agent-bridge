@@ -6,6 +6,10 @@ Terminal agent'larına (Claude Code, Cursor, Codex… MCP konuşan herkes) **ken
 
 Playwright/DevTools MCP'den farkı burada: onlar boş, oturumsuz bir tarayıcı açar. Agent Bridge ise zaten kullandığınız tarayıcıya bağlanır.
 
+![Agent sekmesi: sarı "Agent" sekme grubu, altın sayfa çerçevesi ve hareket imleci](docs/screenshots/agent-tab.png)
+
+*Agent sekmeleri kolayca ayırt edilir: sarı **Agent** sekme grubunda dururlar, sayfa altın bir çerçeve alır ve hareket imleci agent'ın nereyi gösterip tıkladığını gösterir.*
+
 ## Nasıl çalışır
 
 ```
@@ -128,10 +132,14 @@ Sonra `chrome://extensions`'ta Agent Bridge'in **Yeniden yükle** düğmesine ba
 
 ## Popup
 
+<img src="docs/screenshots/popup-tr.png" alt="Agent Bridge popup'ı" width="300" align="right">
+
 - **Agent erişimi:** ana anahtar. Kapalıyken agent tarayıcıya dokunamaz.
 - **Hareket imleci:** agent'ın tıkladığı ya da yazdığı yerde sayfada imleç ve tıklama efekti gösterir.
 - **Son işlemler:** sade dilde günlük ("instagram.com açıldı", "Tıkladı ×3"). Her satırda işlemin geldiği uygulamanın rozeti bulunur (Claude Code, Cursor, Codex…).
 - **Gelişmiş:** port, eşleşme token'ı ve engellenen adres kalıpları.
+
+<br clear="right">
 
 ## Araçlar
 
