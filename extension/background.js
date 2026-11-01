@@ -148,6 +148,20 @@ async function resolveTab(args) {
   return myTabs[myTabs.length - 1];
 }
 
+// Claude-style tab strip marker: agent tabs live in one yellow "Agent" tab group per window,
+// so Chrome outlines them in the tab bar. Purely cosmetic: failures never block the command.
+const GROUP_TITLE = "Agent";
+async function groupAgentTab(tabId) {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.groupId !== -1 && tab.groupId !== undefined) return;
+    const [group] = await chrome.tabGroups.query({ title: GROUP_TITLE, windowId: tab.windowId });
+    if (group) return void (await chrome.tabs.group({ tabIds: tabId, groupId: group.id }));
+    const groupId = await chrome.tabs.group({ tabIds: tabId, createProperties: { windowId: tab.windowId } });
+    await chrome.tabGroups.update(groupId, { title: GROUP_TITLE, color: "yellow", collapsed: false });
+  } catch {}
+}
+
 // Popups opened by an agent tab (target=_blank, window.open) belong to the agent too.
 chrome.tabs.onCreated.addListener(async (tab) => {
   await loadMyTabs();
@@ -156,6 +170,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
   await saveMyTabs();
   bufferOf(tab.openerTabId).notes.push(`new tab opened: [${tab.id}] (now the default tab)`);
   attachDebugger(tab.id).catch(() => {});
+  groupAgentTab(tab.id);
 });
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   await loadMyTabs();
@@ -566,6 +581,7 @@ async function handleCommand(cmd, args = {}) {
           myTabs.push(tabId);
           await saveMyTabs();
           await attachDebugger(tabId); // mark the agent tab right away (frame + 🤖 title)
+          groupAgentTab(tabId);
         }
       }
       refreshBadge();
