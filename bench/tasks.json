@@ -1,0 +1,20 @@
+[
+  {
+    "id": "read-list",
+    "title": "Read a list (Hacker News top 3)",
+    "prompt": "Use the browser. Go to https://news.ycombinator.com and tell me the titles and points of the top 3 stories. Answer briefly.",
+    "expect": ["points"]
+  },
+  {
+    "id": "fill-form",
+    "title": "Fill and submit a form (httpbin)",
+    "prompt": "Use the browser. Open https://httpbin.org/forms/post and fill it in: customer name \"Ada Lovelace\", telephone \"5551234\", e-mail \"ada@example.com\", pizza size Medium, toppings Bacon and Extra Cheese, preferred delivery time 19:30, delivery instructions \"Ring twice\". Submit the order, then report the custname and size values the server echoes back. Answer briefly.",
+    "expect": ["Ada Lovelace", "medium"]
+  },
+  {
+    "id": "repo-facts",
+    "title": "Find facts on a page (GitHub repo)",
+    "prompt": "Use the browser. Open https://github.com/falconsw/agent-bridge and tell me which license the repository uses and the version of its latest release. Answer briefly.",
+    "expect": ["MIT", "0\\.5\\.0"]
+  }
+]

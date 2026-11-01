@@ -1,0 +1,1110 @@
+{
+  "date": "2026-11-01",
+  "model": "sonnet",
+  "runs": 3,
+  "rows": [
+    {
+      "target": "agent-bridge",
+      "task": "read-list",
+      "run": 1,
+      "ok": true,
+      "inputTokens": 33146,
+      "outputTokens": 292,
+      "costUsd": 0.0323057,
+      "seconds": 10.139,
+      "turns": 3,
+      "requests": 3,
+      "toolCalls": 2,
+      "browserCalls": 1,
+      "calls": [
+        "ToolSearch",
+        "navigate"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 472
+        },
+        {
+          "name": "navigate",
+          "chars": 1429,
+          "images": 0,
+          "tokens": 727
+        }
+      ],
+      "toolResultChars": 1429,
+      "toolResultTokens": 727,
+      "images": 0,
+      "answer": "Top 3 on Hacker News right now:\n\n1. **HackerTube: YouTube built from videos recommended by HN**: 1690 points\n2. **Proving and Improving the Platonic Representation Hypothesis with JEPAs**: 41 points\n3. **Novellas with Groff**: 32 points"
+    },
+    {
+      "target": "agent-bridge",
+      "task": "read-list",
+      "run": 2,
+      "ok": true,
+      "inputTokens": 33152,
+      "outputTokens": 292,
+      "costUsd": 0.0323141,
+      "seconds": 5.793,
+      "turns": 3,
+      "requests": 3,
+      "toolCalls": 2,
+      "browserCalls": 1,
+      "calls": [
+        "ToolSearch",
+        "navigate"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 472
+        },
+        {
+          "name": "navigate",
+          "chars": 1429,
+          "images": 0,
+          "tokens": 727
+        }
+      ],
+      "toolResultChars": 1429,
+      "toolResultTokens": 727,
+      "images": 0,
+      "answer": "Top 3 on Hacker News right now:\n\n1. **HackerTube: YouTube built from videos recommended by HN**: 1690 points\n2. **Proving and Improving the Platonic Representation Hypothesis with JEPAs**: 41 points\n3. **Novellas with Groff**: 32 points"
+    },
+    {
+      "target": "agent-bridge",
+      "task": "read-list",
+      "run": 3,
+      "ok": true,
+      "inputTokens": 32924,
+      "outputTokens": 279,
+      "costUsd": 0.031716699999999994,
+      "seconds": 8.211,
+      "turns": 3,
+      "requests": 3,
+      "toolCalls": 2,
+      "browserCalls": 1,
+      "calls": [
+        "ToolSearch",
+        "navigate"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 358
+        },
+        {
+          "name": "navigate",
+          "chars": 1429,
+          "images": 0,
+          "tokens": 727
+        }
+      ],
+      "toolResultChars": 1429,
+      "toolResultTokens": 727,
+      "images": 0,
+      "answer": "Top 3 on Hacker News right now:\n\n1. **HackerTube: YouTube built from videos recommended by HN**: 1690 points\n2. **Proving and Improving the Platonic Representation Hypothesis with JEPAs**: 41 points\n3. **Novellas with Groff**: 32 points"
+    },
+    {
+      "target": "chrome",
+      "task": "read-list",
+      "run": 1,
+      "ok": true,
+      "inputTokens": 56434,
+      "outputTokens": 418,
+      "costUsd": 0.0643722,
+      "seconds": 18.712,
+      "turns": 4,
+      "requests": 4,
+      "toolCalls": 3,
+      "browserCalls": 2,
+      "calls": [
+        "ToolSearch",
+        "navigate",
+        "get_page_text"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 1411
+        },
+        {
+          "name": "navigate",
+          "chars": 802,
+          "images": 0,
+          "tokens": 344
+        },
+        {
+          "name": "get_page_text",
+          "chars": 4518,
+          "images": 0,
+          "tokens": 2125
+        }
+      ],
+      "toolResultChars": 5320,
+      "toolResultTokens": 2469,
+      "images": 0,
+      "answer": "Top 3 stories on the page, in the order the front page ranks them:\n\n1. **HackerTube: YouTube built from videos recommended by HN**: 1692 points\n2. **Proving and Improving the Platonic Representation Hypothesis with JEPAs**: 41 points\n3. **Novellas with Groff**: 32 points\n\nI'm leaving the Hacker News tab open."
+    },
+    {
+      "target": "chrome",
+      "task": "read-list",
+      "run": 2,
+      "ok": true,
+      "inputTokens": 56507,
+      "outputTokens": 511,
+      "costUsd": 0.0661168,
+      "seconds": 12.832,
+      "turns": 5,
+      "requests": 4,
+      "toolCalls": 4,
+      "browserCalls": 3,
+      "calls": [
+        "ToolSearch",
+        "tabs_context_mcp",
+        "navigate",
+        "get_page_text"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 1411
+        },
+        {
+          "name": "tabs_context_mcp",
+          "chars": 436,
+          "images": 0,
+          "tokens": 202
+        },
+        {
+          "name": "navigate",
+          "chars": 438,
+          "images": 0,
+          "tokens": 218
+        },
+        {
+          "name": "get_page_text",
+          "chars": 4518,
+          "images": 0,
+          "tokens": 2246
+        }
+      ],
+      "toolResultChars": 5392,
+      "toolResultTokens": 2666,
+      "images": 0,
+      "answer": "Top 3 stories on the front page:\n\n1. **HackerTube: YouTube built from videos recommended by HN**: 1692 points\n2. **Proving and Improving the Platonic Representation Hypothesis with JEPAs**: 41 points\n3. **Novellas with Groff**: 32 points\n\nThese are the first three entries in front-page order, not the three highest-scoring ones."
+    },
+    {
+      "target": "chrome",
+      "task": "read-list",
+      "run": 3,
+      "ok": true,
+      "inputTokens": 72819,
+      "outputTokens": 465,
+      "costUsd": 0.0669291,
+      "seconds": 14.314,
+      "turns": 5,
+      "requests": 5,
+      "toolCalls": 4,
+      "browserCalls": 3,
+      "calls": [
+        "ToolSearch",
+        "navigate",
+        "get_page_text",
+        "tabs_close_mcp"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 1411
+        },
+        {
+          "name": "navigate",
+          "chars": 802,
+          "images": 0,
+          "tokens": 340
+        },
+        {
+          "name": "get_page_text",
+          "chars": 4518,
+          "images": 0,
+          "tokens": 2125
+        },
+        {
+          "name": "tabs_close_mcp",
+          "chars": 89,
+          "images": 0,
+          "tokens": 73
+        }
+      ],
+      "toolResultChars": 5409,
+      "toolResultTokens": 2538,
+      "images": 0,
+      "answer": "Top 3 stories on Hacker News right now:\n\n1. **HackerTube: YouTube built from videos recommended by HN**: 1692 points\n2. **Proving and Improving the Platonic Representation Hypothesis with JEPAs**: 41 points\n3. **Novellas with Groff**: 32 points"
+    },
+    {
+      "target": "agent-bridge",
+      "task": "fill-form",
+      "run": 1,
+      "ok": true,
+      "inputTokens": 62333,
+      "outputTokens": 603,
+      "costUsd": 0.0463058,
+      "seconds": 18.453,
+      "turns": 5,
+      "requests": 5,
+      "toolCalls": 4,
+      "browserCalls": 3,
+      "calls": [
+        "ToolSearch",
+        "navigate",
+        "fill",
+        "click"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 1800
+        },
+        {
+          "name": "navigate",
+          "chars": 390,
+          "images": 0,
+          "tokens": 245
+        },
+        {
+          "name": "fill",
+          "chars": 165,
+          "images": 0,
+          "tokens": 277
+        },
+        {
+          "name": "click",
+          "chars": 1333,
+          "images": 0,
+          "tokens": 769
+        }
+      ],
+      "toolResultChars": 1888,
+      "toolResultTokens": 1291,
+      "images": 0,
+      "answer": "The server echoed back **custname** = \"Ada Lovelace\" and **size** = \"medium\".\n\nThe delivery time didn't register. The server shows `delivery` as empty, so the 19:30 value didn't make it into the submission. Everything else came through as entered: toppings were bacon and cheese, and the comments were \"Ring twice\"."
+    },
+    {
+      "target": "agent-bridge",
+      "task": "fill-form",
+      "run": 2,
+      "ok": true,
+      "inputTokens": 62789,
+      "outputTokens": 647,
+      "costUsd": 0.047236,
+      "seconds": 12.442,
+      "turns": 5,
+      "requests": 5,
+      "toolCalls": 4,
+      "browserCalls": 3,
+      "calls": [
+        "ToolSearch",
+        "navigate",
+        "fill",
+        "click"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 1914
+        },
+        {
+          "name": "navigate",
+          "chars": 390,
+          "images": 0,
+          "tokens": 245
+        },
+        {
+          "name": "fill",
+          "chars": 165,
+          "images": 0,
+          "tokens": 277
+        },
+        {
+          "name": "click",
+          "chars": 1333,
+          "images": 0,
+          "tokens": 769
+        }
+      ],
+      "toolResultChars": 1888,
+      "toolResultTokens": 1291,
+      "images": 0,
+      "answer": "The server echoed `custname` = \"Ada Lovelace\" and `size` = \"medium\".\n\nThe echo also showed `delivery` as an empty string, so the 19:30 delivery time didn't register. The other fields came through as entered: toppings `bacon` and `cheese`, `comments` \"Ring twice\", `custtel` 5551234, and `custemail` ada@example.com.\n\nI can re-enter the time and resubmit if you want."
+    },
+    {
+      "target": "agent-bridge",
+      "task": "fill-form",
+      "run": 3,
+      "ok": true,
+      "inputTokens": 48332,
+      "outputTokens": 570,
+      "costUsd": 0.043394100000000005,
+      "seconds": 25.664,
+      "turns": 5,
+      "requests": 4,
+      "toolCalls": 4,
+      "browserCalls": 3,
+      "calls": [
+        "ToolSearch",
+        "navigate",
+        "fill",
+        "click"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 1438
+        },
+        {
+          "name": "navigate",
+          "chars": 390,
+          "images": 0,
+          "tokens": 245
+        },
+        {
+          "name": "fill",
+          "chars": 165,
+          "images": 0,
+          "tokens": 125
+        },
+        {
+          "name": "click",
+          "chars": 1333,
+          "images": 0,
+          "tokens": 1007
+        }
+      ],
+      "toolResultChars": 1888,
+      "toolResultTokens": 1377,
+      "images": 0,
+      "answer": "The server echoed back these values:\n- **custname:** \"Ada Lovelace\"\n- **size:** \"medium\"\n\nThe delivery time came back empty (`\"delivery\": \"\"`), so the 19:30 may not have registered in the time field. The other fields (phone, e-mail, toppings `bacon` and `cheese`, and comments \"Ring twice\") came back as entered."
+    },
+    {
+      "target": "chrome",
+      "task": "fill-form",
+      "run": 1,
+      "ok": true,
+      "inputTokens": 171808,
+      "outputTokens": 1778,
+      "costUsd": 0.11185220000000001,
+      "seconds": 36.812,
+      "turns": 16,
+      "requests": 9,
+      "toolCalls": 15,
+      "browserCalls": 14,
+      "calls": [
+        "ToolSearch",
+        "navigate",
+        "read_page",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "javascript_tool",
+        "computer",
+        "get_page_text",
+        "tabs_close_mcp"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 5176
+        },
+        {
+          "name": "navigate",
+          "chars": 805,
+          "images": 0,
+          "tokens": 349
+        },
+        {
+          "name": "read_page",
+          "chars": 595,
+          "images": 0,
+          "tokens": 362
+        },
+        {
+          "name": "form_input",
+          "chars": 199,
+          "images": 0,
+          "tokens": 250
+        },
+        {
+          "name": "form_input",
+          "chars": 193,
+          "images": 0,
+          "tokens": 243
+        },
+        {
+          "name": "form_input",
+          "chars": 203,
+          "images": 0,
+          "tokens": 255
+        },
+        {
+          "name": "form_input",
+          "chars": 152,
+          "images": 0,
+          "tokens": 191
+        },
+        {
+          "name": "form_input",
+          "chars": 186,
+          "images": 0,
+          "tokens": 234
+        },
+        {
+          "name": "form_input",
+          "chars": 186,
+          "images": 0,
+          "tokens": 234
+        },
+        {
+          "name": "form_input",
+          "chars": 184,
+          "images": 0,
+          "tokens": 231
+        },
+        {
+          "name": "form_input",
+          "chars": 201,
+          "images": 0,
+          "tokens": 253
+        },
+        {
+          "name": "javascript_tool",
+          "chars": 305,
+          "images": 0,
+          "tokens": 248
+        },
+        {
+          "name": "computer",
+          "chars": 423,
+          "images": 0,
+          "tokens": 264
+        },
+        {
+          "name": "get_page_text",
+          "chars": 1480,
+          "images": 0,
+          "tokens": 867
+        },
+        {
+          "name": "tabs_close_mcp",
+          "chars": 89,
+          "images": 0,
+          "tokens": 74
+        }
+      ],
+      "toolResultChars": 5201,
+      "toolResultTokens": 4055,
+      "images": 0,
+      "answer": "I submitted the order. The server echoed back:\n\n- **custname:** Ada Lovelace\n- **size:** medium\n\nThe other fields also came back as entered, with toppings `bacon` and `cheese`. I closed the tab afterward."
+    },
+    {
+      "target": "chrome",
+      "task": "fill-form",
+      "run": 2,
+      "ok": true,
+      "inputTokens": 130075,
+      "outputTokens": 1795,
+      "costUsd": 0.1097601,
+      "seconds": 36.973,
+      "turns": 16,
+      "requests": 7,
+      "toolCalls": 15,
+      "browserCalls": 14,
+      "calls": [
+        "ToolSearch",
+        "tabs_context_mcp",
+        "navigate",
+        "read_page",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "computer",
+        "computer",
+        "get_page_text"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 5091
+        },
+        {
+          "name": "tabs_context_mcp",
+          "chars": 435,
+          "images": 0,
+          "tokens": 201
+        },
+        {
+          "name": "navigate",
+          "chars": 441,
+          "images": 0,
+          "tokens": 302
+        },
+        {
+          "name": "read_page",
+          "chars": 595,
+          "images": 0,
+          "tokens": 407
+        },
+        {
+          "name": "form_input",
+          "chars": 199,
+          "images": 0,
+          "tokens": 250
+        },
+        {
+          "name": "form_input",
+          "chars": 193,
+          "images": 0,
+          "tokens": 243
+        },
+        {
+          "name": "form_input",
+          "chars": 203,
+          "images": 0,
+          "tokens": 255
+        },
+        {
+          "name": "form_input",
+          "chars": 152,
+          "images": 0,
+          "tokens": 191
+        },
+        {
+          "name": "form_input",
+          "chars": 186,
+          "images": 0,
+          "tokens": 234
+        },
+        {
+          "name": "form_input",
+          "chars": 186,
+          "images": 0,
+          "tokens": 234
+        },
+        {
+          "name": "form_input",
+          "chars": 184,
+          "images": 0,
+          "tokens": 231
+        },
+        {
+          "name": "form_input",
+          "chars": 201,
+          "images": 0,
+          "tokens": 253
+        },
+        {
+          "name": "computer",
+          "chars": 265,
+          "images": 1,
+          "tokens": 629
+        },
+        {
+          "name": "computer",
+          "chars": 423,
+          "images": 0,
+          "tokens": 278
+        },
+        {
+          "name": "get_page_text",
+          "chars": 1480,
+          "images": 0,
+          "tokens": 970
+        }
+      ],
+      "toolResultChars": 5143,
+      "toolResultTokens": 4678,
+      "images": 1,
+      "answer": "Order submitted. The server echoed back:\n\n- **custname:** `Ada Lovelace`\n- **size:** `medium`\n\nThe other fields also came back as entered: toppings `bacon` and `cheese`, delivery `19:30`, comments `Ring twice`."
+    },
+    {
+      "target": "chrome",
+      "task": "fill-form",
+      "run": 3,
+      "ok": true,
+      "inputTokens": 171842,
+      "outputTokens": 1830,
+      "costUsd": 0.112438,
+      "seconds": 37.246,
+      "turns": 16,
+      "requests": 9,
+      "toolCalls": 15,
+      "browserCalls": 14,
+      "calls": [
+        "ToolSearch",
+        "navigate",
+        "read_page",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "form_input",
+        "javascript_tool",
+        "computer",
+        "get_page_text",
+        "tabs_close_mcp"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 5176
+        },
+        {
+          "name": "navigate",
+          "chars": 805,
+          "images": 0,
+          "tokens": 345
+        },
+        {
+          "name": "read_page",
+          "chars": 595,
+          "images": 0,
+          "tokens": 363
+        },
+        {
+          "name": "form_input",
+          "chars": 199,
+          "images": 0,
+          "tokens": 250
+        },
+        {
+          "name": "form_input",
+          "chars": 193,
+          "images": 0,
+          "tokens": 243
+        },
+        {
+          "name": "form_input",
+          "chars": 203,
+          "images": 0,
+          "tokens": 255
+        },
+        {
+          "name": "form_input",
+          "chars": 152,
+          "images": 0,
+          "tokens": 191
+        },
+        {
+          "name": "form_input",
+          "chars": 186,
+          "images": 0,
+          "tokens": 234
+        },
+        {
+          "name": "form_input",
+          "chars": 186,
+          "images": 0,
+          "tokens": 234
+        },
+        {
+          "name": "form_input",
+          "chars": 184,
+          "images": 0,
+          "tokens": 231
+        },
+        {
+          "name": "form_input",
+          "chars": 201,
+          "images": 0,
+          "tokens": 253
+        },
+        {
+          "name": "javascript_tool",
+          "chars": 156,
+          "images": 0,
+          "tokens": 280
+        },
+        {
+          "name": "computer",
+          "chars": 423,
+          "images": 0,
+          "tokens": 270
+        },
+        {
+          "name": "get_page_text",
+          "chars": 1480,
+          "images": 0,
+          "tokens": 867
+        },
+        {
+          "name": "tabs_close_mcp",
+          "chars": 89,
+          "images": 0,
+          "tokens": 74
+        }
+      ],
+      "toolResultChars": 5052,
+      "toolResultTokens": 4090,
+      "images": 0,
+      "answer": "The order went through, and the server echoed back:\n- **custname:** `Ada Lovelace`\n- **size:** `medium`\n\nIt also echoed the other fields as I entered them. The toppings came back as `bacon` and `cheese`."
+    },
+    {
+      "target": "agent-bridge",
+      "task": "repo-facts",
+      "run": 1,
+      "ok": true,
+      "inputTokens": 49721,
+      "outputTokens": 371,
+      "costUsd": 0.0449282,
+      "seconds": 13.663,
+      "turns": 4,
+      "requests": 4,
+      "toolCalls": 3,
+      "browserCalls": 2,
+      "calls": [
+        "ToolSearch",
+        "navigate",
+        "navigate"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 698
+        },
+        {
+          "name": "navigate",
+          "chars": 5475,
+          "images": 0,
+          "tokens": 2495
+        },
+        {
+          "name": "navigate",
+          "chars": 1015,
+          "images": 0,
+          "tokens": 603
+        }
+      ],
+      "toolResultChars": 6490,
+      "toolResultTokens": 3098,
+      "images": 0,
+      "answer": "- **License:** MIT\n- **Latest release:** v0.5.0"
+    },
+    {
+      "target": "agent-bridge",
+      "task": "repo-facts",
+      "run": 2,
+      "ok": true,
+      "inputTokens": 49728,
+      "outputTokens": 373,
+      "costUsd": 0.044956699999999995,
+      "seconds": 11.586,
+      "turns": 4,
+      "requests": 4,
+      "toolCalls": 3,
+      "browserCalls": 2,
+      "calls": [
+        "ToolSearch",
+        "navigate",
+        "navigate"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 698
+        },
+        {
+          "name": "navigate",
+          "chars": 5485,
+          "images": 0,
+          "tokens": 2500
+        },
+        {
+          "name": "navigate",
+          "chars": 1015,
+          "images": 0,
+          "tokens": 600
+        }
+      ],
+      "toolResultChars": 6500,
+      "toolResultTokens": 3100,
+      "images": 0,
+      "answer": "The repository uses the **MIT license**, and its latest release is **v0.5.0**."
+    },
+    {
+      "target": "agent-bridge",
+      "task": "repo-facts",
+      "run": 3,
+      "ok": true,
+      "inputTokens": 49840,
+      "outputTokens": 370,
+      "costUsd": 0.04537469999999999,
+      "seconds": 13.278,
+      "turns": 4,
+      "requests": 4,
+      "toolCalls": 3,
+      "browserCalls": 2,
+      "calls": [
+        "ToolSearch",
+        "navigate",
+        "navigate"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 698
+        },
+        {
+          "name": "navigate",
+          "chars": 5485,
+          "images": 0,
+          "tokens": 2500
+        },
+        {
+          "name": "navigate",
+          "chars": 1265,
+          "images": 0,
+          "tokens": 712
+        }
+      ],
+      "toolResultChars": 6750,
+      "toolResultTokens": 3212,
+      "images": 0,
+      "answer": "The repository uses the **MIT license**, and its latest release is **v0.5.0**."
+    },
+    {
+      "target": "chrome",
+      "task": "repo-facts",
+      "run": 1,
+      "ok": true,
+      "inputTokens": 112007,
+      "outputTokens": 633,
+      "costUsd": 0.08111159999999999,
+      "seconds": 34.101,
+      "turns": 7,
+      "requests": 7,
+      "toolCalls": 6,
+      "browserCalls": 5,
+      "calls": [
+        "ToolSearch",
+        "navigate",
+        "get_page_text",
+        "navigate",
+        "get_page_text",
+        "tabs_close_mcp"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 1411
+        },
+        {
+          "name": "navigate",
+          "chars": 835,
+          "images": 0,
+          "tokens": 365
+        },
+        {
+          "name": "get_page_text",
+          "chars": 7800,
+          "images": 0,
+          "tokens": 3048
+        },
+        {
+          "name": "navigate",
+          "chars": 519,
+          "images": 0,
+          "tokens": 322
+        },
+        {
+          "name": "get_page_text",
+          "chars": 1699,
+          "images": 0,
+          "tokens": 886
+        },
+        {
+          "name": "tabs_close_mcp",
+          "chars": 89,
+          "images": 0,
+          "tokens": 74
+        }
+      ],
+      "toolResultChars": 10942,
+      "toolResultTokens": 4695,
+      "images": 0,
+      "answer": "The repository uses the **MIT** license (from the README's License section), and its latest release is **v0.5.0**. I didn't open a separate LICENSE file.\n\nI also closed the browser tab I opened."
+    },
+    {
+      "target": "chrome",
+      "task": "repo-facts",
+      "run": 2,
+      "ok": true,
+      "inputTokens": 111985,
+      "outputTokens": 596,
+      "costUsd": 0.0807199,
+      "seconds": 26.924,
+      "turns": 7,
+      "requests": 7,
+      "toolCalls": 6,
+      "browserCalls": 5,
+      "calls": [
+        "ToolSearch",
+        "navigate",
+        "get_page_text",
+        "navigate",
+        "get_page_text",
+        "tabs_close_mcp"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 1411
+        },
+        {
+          "name": "navigate",
+          "chars": 834,
+          "images": 0,
+          "tokens": 360
+        },
+        {
+          "name": "get_page_text",
+          "chars": 7800,
+          "images": 0,
+          "tokens": 3048
+        },
+        {
+          "name": "navigate",
+          "chars": 519,
+          "images": 0,
+          "tokens": 323
+        },
+        {
+          "name": "get_page_text",
+          "chars": 1699,
+          "images": 0,
+          "tokens": 886
+        },
+        {
+          "name": "tabs_close_mcp",
+          "chars": 89,
+          "images": 0,
+          "tokens": 74
+        }
+      ],
+      "toolResultChars": 10941,
+      "toolResultTokens": 4691,
+      "images": 0,
+      "answer": "The repository uses the **MIT** license, and its latest release is **v0.5.0**."
+    },
+    {
+      "target": "chrome",
+      "task": "repo-facts",
+      "run": 3,
+      "ok": true,
+      "inputTokens": 112033,
+      "outputTokens": 601,
+      "costUsd": 0.08082149999999999,
+      "seconds": 18.214,
+      "turns": 7,
+      "requests": 7,
+      "toolCalls": 6,
+      "browserCalls": 5,
+      "calls": [
+        "ToolSearch",
+        "navigate",
+        "get_page_text",
+        "navigate",
+        "get_page_text",
+        "tabs_close_mcp"
+      ],
+      "ops": [
+        {
+          "name": "ToolSearch",
+          "chars": 0,
+          "images": 0,
+          "tokens": 1411
+        },
+        {
+          "name": "navigate",
+          "chars": 835,
+          "images": 0,
+          "tokens": 361
+        },
+        {
+          "name": "get_page_text",
+          "chars": 7800,
+          "images": 0,
+          "tokens": 3048
+        },
+        {
+          "name": "navigate",
+          "chars": 519,
+          "images": 0,
+          "tokens": 328
+        },
+        {
+          "name": "get_page_text",
+          "chars": 1699,
+          "images": 0,
+          "tokens": 886
+        },
+        {
+          "name": "tabs_close_mcp",
+          "chars": 89,
+          "images": 0,
+          "tokens": 74
+        }
+      ],
+      "toolResultChars": 10942,
+      "toolResultTokens": 4697,
+      "images": 0,
+      "answer": "The repository uses the **MIT** license, and its latest release is **v0.5.0**."
+    }
+  ]
+}

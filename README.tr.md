@@ -174,6 +174,25 @@ cd agent-bridge && npm install
 
 **Birden çok agent:** ilk köprü süreci portu alır, sonraki oturumlar (Claude Code, Cursor, Codex…) ona sürücü olarak katılır. İlk süreç kapanınca bir diğeri portu devralır.
 
+## Kıyaslama
+
+Aynı görevler, aynı model (`sonnet`); her biri yalnız tek bir tarayıcı aracı kullanabilen yeni, başsız bir Claude Code oturumunda. 3 koşunun medyanı; 18 koşunun hepsi doğru cevap verdi.
+
+| 3 görev toplamı | Agent Bridge | Claude in Chrome |
+| --- | ---: | ---: |
+| Token (girdi + çıktı) | **146,5k** | 343,2k |
+| Tarayıcı aracı çağrısı | **6** | 22 |
+| Tarayıcı araçlarının döndürdüğü token | **5,1k** | 11,3k |
+| Süre | **39,9 sn** | 78,2 sn |
+| Maliyet | **0,124 $** | 0,259 $ |
+
+Her işlem ve harcadığı token, ör. 7 alanlı bir form doldurmak:
+
+- **Agent Bridge:** `navigate` (245 tok) → `fill` (277) → `click` (769): 3 çağrı
+- **Claude in Chrome:** `navigate` (345) → `read_page` (363) → `form_input` ×8 (her biri ~240) → `javascript_tool` (280) → `computer` (270) → `get_page_text` (867) → `tabs_close_mcp` (74): 14 çağrı
+
+Tüm sonuçlar, görev bazlı tablolar ve işlem başına token: [bench/RESULTS.md](bench/RESULTS.md) (İngilizce). Yeniden üretmek için: `node bench/run.mjs --runs 3` ve `node bench/report.mjs`.
+
 ## Güvenlik
 
 - **Sekme yalıtımı:** agent yalnız **kendi açtığı sekmelerde** çalışır. Sizin sekmelerinizi listeleyemez, onlarda gezinemez, tıklayamaz.

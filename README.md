@@ -174,6 +174,25 @@ Load the `extension/` folder with "Load unpacked", and use `node /path/to/agent-
 
 **Several agents at once:** the first bridge process takes the port, and later sessions (Claude Code, Cursor, Codex…) join it as drivers. When the first one exits, another takes over the port.
 
+## Benchmark
+
+Same tasks, same model (`sonnet`), each in a fresh headless Claude Code session that may use only one browser tool. Medians of 3 runs; all 18 runs answered correctly.
+
+| 3 tasks in total | Agent Bridge | Claude in Chrome |
+| --- | ---: | ---: |
+| Tokens (input + output) | **146.5k** | 343.2k |
+| Browser tool calls | **6** | 22 |
+| Tokens returned by browser tools | **5.1k** | 11.3k |
+| Time | **39.9 s** | 78.2 s |
+| Cost | **$0.124** | $0.259 |
+
+Each operation and what it cost, e.g. filling a 7-field form:
+
+- **Agent Bridge:** `navigate` (245 tok) → `fill` (277) → `click` (769): 3 calls
+- **Claude in Chrome:** `navigate` (345) → `read_page` (363) → `form_input` ×8 (~240 each) → `javascript_tool` (280) → `computer` (270) → `get_page_text` (867) → `tabs_close_mcp` (74): 14 calls
+
+Full results, per-task tables and tokens per operation: [bench/RESULTS.md](bench/RESULTS.md). Reproduce with `node bench/run.mjs --runs 3` and `node bench/report.mjs`.
+
 ## Security
 
 - **Tab isolation:** the agent only works in **tabs it opened itself**. It cannot list, navigate or click your own tabs.
