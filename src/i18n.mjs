@@ -5,7 +5,7 @@ const dicts = {
   tr: {
     help: `agent-bridge — agent'lara Chrome'da işlem yaptıran köprü
 
-Kullanım: agent-bridge [--port 8791] [--token XXXX-XXXX] [--shots <klasör>] [--lang tr|en] [--fresh]
+Kullanım: agent-bridge [--port 8791] [--token XXXX-XXXX] [--shots <klasör, varsayılan ~/.agent-bridge/shots>] [--lang tr|en] [--fresh]
 
 1. Bu komutu çalıştır
 2. Chrome'da Agent Bridge eklentisinde "Agent erişimi" anahtarını aç (ilk açılışta otomatik eşleşir)

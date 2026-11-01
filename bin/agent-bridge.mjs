@@ -29,7 +29,8 @@ if (process.argv.includes("--fresh")) {
 }
 
 const port = Number(arg("port", 8791));
-const shotsDir = arg("shots", join(process.cwd(), "shots"));
+// Not cwd: GUI clients (Claude Desktop, Cursor…) may start us in "/", which is read-only.
+const shotsDir = arg("shots", join(homedir(), ".agent-bridge", "shots"));
 mkdirSync(shotsDir, { recursive: true });
 
 if (!arg("token")) console.error(t("bridgePairMode"));
