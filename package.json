@@ -1,7 +1,7 @@
 {
   "name": "agent-bridge",
   "version": "0.4.2",
-  "description": "Terminal agentlarına (MCP) Chrome üzerinde işlem yaptıran köprü: Chrome eklentisi + yerel WebSocket + MCP sunucusu",
+  "description": "Let MCP agents (Claude Code, Cursor, Codex…) drive your real, logged-in Chrome — Chrome extension + local WebSocket bridge + MCP server",
   "directories": {
     "test": "test"
   },
@@ -12,12 +12,26 @@
   "type": "module",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "ws": "^8.22.1"
-  },
-  "devDependencies": {
+    "ws": "^8.22.1",
     "zod": "^4.6.7"
   },
   "bin": {
     "agent-bridge": "bin/agent-bridge.mjs"
-  }
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/falconsw/agent-bridge.git"
+  },
+  "keywords": [
+    "mcp",
+    "chrome",
+    "browser-automation",
+    "claude",
+    "cursor",
+    "codex",
+    "agent"
+  ]
 }

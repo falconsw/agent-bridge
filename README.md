@@ -1,93 +1,190 @@
 # Agent Bridge
 
-Terminal agent'larına (Claude Code, Cursor, Codex… — MCP konuşan herkes) **kendi Chrome'unuzda** işlem yaptıran köprü. Agent sekme okur, tıklar, yazar, ekran görüntüsü alır — **sizin oturumlarınızla**: Studio, Search Console, TikTok, Business Suite… hepsi girili kalır.
+**English** · [Türkçe](README.tr.md)
 
-Playwright/DevTools MCP'den farkı burada: onlar boş, oturumsuz bir tarayıcı açar. Agent Bridge sizin gerçek tarayıcınıza bağlanır.
+Let terminal agents (Claude Code, Cursor, Codex… anything that speaks MCP) work in **your own Chrome**: read pages, click, type, fill forms, upload files, take screenshots. They do it **with your logged-in sessions**, so YouTube Studio, Search Console, TikTok, Business Suite and the rest stay signed in.
 
-## Nasıl çalışır
+That's the difference from Playwright / DevTools MCP, which start an empty browser with no sessions. Agent Bridge connects to the browser you already use.
 
-```
-agent (MCP istemcisi)  ⇄ stdio  ⇄  agent-bridge  ⇄ WebSocket (127.0.0.1)  ⇄  Chrome eklentisi  ⇄  sayfalar
-                                        (token korumalı)                          (chrome.debugger)
-```
-
-- **Eklenti** `chrome.debugger` API'sini kullanır: uzaktan hata ayıklama portu (9222) açmaya gerek yoktur.
-- **Köprü** yalnız `127.0.0.1`'e bağlanır; eklenti açılışta token gönderir, token eşleşmezse bağlantı reddedilir.
-- Ekran görüntüsü dahil tüm veriler makinenizden çıkmaz.
-
-## Kurulum
-
-**1. Eklenti (bir kez):**
-
-1. Chrome'da `chrome://extensions` → sağ üstten **Geliştirici modu**'nu aç
-2. **Paketlenmemiş öğe yükle** → bu depodaki `extension/` klasörünü seç
-3. Araç çubuğundaki Agent Bridge simgesine tıkla (→ iğneyle sabitle)
-
-**2. Köprü (her çalışmada):**
+## How it works
 
 ```
-node bin/agent-bridge.mjs
+agent (MCP client)  ⇄ stdio ⇄  agent-bridge  ⇄ WebSocket (127.0.0.1) ⇄  Chrome extension  ⇄  pages
+                                              (token-protected)          (chrome.debugger)
 ```
 
-**3. Eşleşme (tek hareket):** eklenti popup'ında **"Agent erişimi"** anahtarını aç. İlk bağlantı otomatik eşleşir (TOFU — ilk bağlanana güven); eşleşme `~/.agent-bridge/token.json`'a yazılır, sonraki köprü süreçleri onu tanır. Rozet **AÇIK** olur.
+- The **extension** uses the `chrome.debugger` API, so there is no remote debugging port (9222) to open.
+- The **bridge** listens on `127.0.0.1` only. The extension sends a token when it connects, and a wrong token is rejected.
+- Nothing leaves your machine, screenshots included.
 
-Yeniden eşleştirmek gerekirse: köprüyü `--fresh` ile başlat.
+## Installation
 
-**4. Agent'a MCP olarak ekle (örnek, Claude Code):**
+> The extension is not on the Chrome Web Store yet; for now it is loaded from this repository ("unpacked").
 
+**Requirements:** Node.js 18+, Chrome 116+ (or another Chromium browser: Edge, Brave, Arc).
+
+### 1. Get the code
+
+```bash
+git clone https://github.com/falconsw/agent-bridge.git
+cd agent-bridge
+npm install
 ```
-claude mcp add agent-bridge -- node /tam/yol/agent-bridge/bin/agent-bridge.mjs
+
+### 2. Load the extension into Chrome (once)
+
+1. Open `chrome://extensions`.
+2. Turn on **Developer mode** (top right).
+3. Click **Load unpacked** and select the `extension/` folder of this repository.
+4. Click the puzzle icon in the toolbar and **pin** Agent Bridge so you can see it.
+
+> Do not move or delete the folder afterwards: Chrome loads the extension straight from it.
+
+### 3. Add it to your agent as an MCP server
+
+Use **absolute paths**. GUI apps (Claude Desktop, Cursor…) don't see your shell `PATH`, so give the full path to `node` too: `which node` prints it (e.g. `/opt/homebrew/bin/node`). Replace `/path/to/agent-bridge` below with where you cloned the repo (`pwd` inside it).
+
+<details open>
+<summary><b>Claude Code</b></summary>
+
+```bash
+claude mcp add --scope user agent-bridge -- node /path/to/agent-bridge/bin/agent-bridge.mjs
+```
+</details>
+
+<details>
+<summary><b>Claude Desktop</b>: <code>~/Library/Application Support/Claude/claude_desktop_config.json</code></summary>
+
+```json
+{
+  "mcpServers": {
+    "agent-bridge": {
+      "command": "/opt/homebrew/bin/node",
+      "args": ["/path/to/agent-bridge/bin/agent-bridge.mjs"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Cursor</b>: <code>~/.cursor/mcp.json</code></summary>
+
+```json
+{
+  "mcpServers": {
+    "agent-bridge": {
+      "command": "/opt/homebrew/bin/node",
+      "args": ["/path/to/agent-bridge/bin/agent-bridge.mjs"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Codex CLI</b>: <code>~/.codex/config.toml</code></summary>
+
+```toml
+[mcp_servers.agent-bridge]
+command = "/opt/homebrew/bin/node"
+args = ["/path/to/agent-bridge/bin/agent-bridge.mjs"]
+```
+</details>
+
+<details>
+<summary><b>VS Code (Copilot)</b>: <code>.vscode/mcp.json</code> or the user <code>mcp.json</code></summary>
+
+```json
+{
+  "servers": {
+    "agent-bridge": {
+      "type": "stdio",
+      "command": "/opt/homebrew/bin/node",
+      "args": ["/path/to/agent-bridge/bin/agent-bridge.mjs"]
+    }
+  }
+}
+```
+</details>
+
+Any other MCP client works the same way: a **stdio** server with command `node` and argument `/path/to/agent-bridge/bin/agent-bridge.mjs`. Restart the agent after adding it.
+
+### 4. Pair (one switch)
+
+Open the Agent Bridge popup and turn on **Agent access**. The first connection pairs automatically (trust on first use), and the pairing is saved to `~/.agent-bridge/token.json`. The status turns green ("Connected").
+
+Then just ask your agent something like *"open search console and tell me which pages lost clicks this week"*.
+
+To pair again (for example after reinstalling the extension), start the bridge once with `--fresh`.
+
+### Updating
+
+```bash
+git pull && npm install
 ```
 
-## Araçlar
+Then click **Reload** on Agent Bridge in `chrome://extensions` and restart your agent.
 
-| Araç | İş |
+## The popup
+
+- **Agent access:** the master switch. When it's off, the agent can't touch the browser.
+- **Motion cursor:** shows a pointer and click ripple on the page wherever the agent clicks or types.
+- **Recent actions:** a plain-language log ("Opened instagram.com", "Clicked ×3"), with a badge for the app it came from (Claude Code, Cursor, Codex…).
+- **Advanced:** port, pairing token, and blocked URL patterns.
+
+## Tools
+
+| Tool | What it does |
 | --- | --- |
-| `navigate` | Adrese gider (ya da `back`/`forward`/`reload`), **yüklenmeyi bekler ve sayfa görüntüsünü döndürür** |
-| `read` | Sayfa görüntüsü: `rol "etiket" rN [durum]` satırları, tablolar `row "hücre | hücre"` olarak. `mode: "all"` tüm metni de ekler; `ref`/`selector`/`viewport` ile daraltılır |
-| `find` | Etiket ve metinde arar, eşleşen satırları ref ve link adresiyle döndürür (`read`'den çok daha ucuz) |
-| `click` / `hover` | `rN`, CSS seçici ya da etiketle **gerçek fare olayı**; sayfa durulana kadar bekler, **yalnız değişeni** döndürür |
-| `type` / `fill` | Gerçek klavye girdisi (`Input.insertText`); `fill` bütün formu tek çağrıda doldurur: metin, `<select>`, onay kutusu/radyo (`true`/`false`) |
-| `select` | Yerel `<select>` seçeneği seçer |
-| `key` | Tuş ve kısayollar: `Enter`, `Escape`, `Tab Tab Enter`, `cmd+a` |
-| `scroll` | Kaydırır, ekranda görünenleri döndürür |
-| `upload` | `<input type=file>` alanına yerel dosya verir (post için fotoğraf/video) |
-| `wait` | Metin/seçici görünene (ya da `gone` ile kaybolana) kadar bekler |
-| `console` / `network` | Sekmenin konsol mesajları ve ağ istekleri |
-| `screenshot` | Görünen alanın JPEG'i (1280 px'e kadar); pahalıdır, yalnız görsel sorular için |
-| `eval` | Sayfada JavaScript çalıştırır (son çare) |
-| `tabs` | Agent sekmeleri; `switchTo`, `close` |
-| `done` | İş tamamen bitince sekmeleri kapatır |
+| `navigate` | Goes to a URL (or `back`/`forward`/`reload`), **waits for the load and returns the page snapshot** |
+| `read` | Page snapshot: `role "label" rN [state]` lines, tables as `row "cell | cell"`. `mode: "all"` adds the full text; narrow it with `ref`/`selector`/`viewport` |
+| `find` | Searches labels and text, returns matching lines with refs and link targets (much cheaper than `read`) |
+| `click` / `hover` | **Real mouse events** on `rN`, a CSS selector or a label; waits for the page to settle and returns **only what changed** |
+| `type` / `fill` | Real keyboard input; `fill` completes a whole form in one call: text, `<select>`, checkbox/radio (`true`/`false`) |
+| `select` | Picks a native `<select>` option |
+| `key` | Keys and shortcuts: `Enter`, `Escape`, `Tab Tab Enter`, `cmd+a` |
+| `scroll` | Scrolls and returns what is now visible |
+| `upload` | Gives a local file to an `<input type=file>` (photos/videos for posts) |
+| `wait` | Waits until text/a selector appears (or disappears with `gone`) |
+| `console` / `network` | The tab's console messages and network requests |
+| `screenshot` | JPEG of the visible area (up to 1280 px); expensive, only for visual questions. Saved under `~/.agent-bridge/shots` |
+| `eval` | Runs JavaScript in the page (last resort) |
+| `tabs` | The agent's tabs; `switchTo`, `close` |
+| `done` | Closes the agent's tabs when the whole task is finished |
 
-**Token tasarrufu:** `navigate` görüntüyü zaten döndürür; eylemler yalnız yeni çıkan öğeleri (ya da yeni sayfayı) bildirir; aynı satırlar birleşir; görünmeyen/`aria-hidden` öğeler atlanır; araç açıklamaları kısa ve İngilizcedir. Açılır pencereler (alert/confirm) otomatik kabul edilip bildirilir, agent sekmesinin açtığı yeni sekmeler agent'e geçer. Shadow DOM ve aynı kökenli iframe'ler de okunur.
+**Token-efficient:** `navigate` already returns the snapshot, actions report only new elements (or the new page), repeated lines are merged, and hidden/`aria-hidden` elements are skipped. Dialogs (alert/confirm) are accepted and reported, and new tabs opened by an agent tab are handed to the agent. Shadow DOM and same-origin iframes are read too.
 
-**Birden çok agent:** ilk köprü süreci portu alır; sonraki oturumlar (Claude Code, Cursor, Codex…) ona sürücü olarak katılır, ilk süreç kapanınca biri portu devralır.
+**Several agents at once:** the first bridge process takes the port, and later sessions (Claude Code, Cursor, Codex…) join it as drivers. When the first one exits, another takes over the port.
 
-## Test
+## Security
 
-Chrome gerekmez; sahte eklentiyle uçtan uca:
+- **Tab isolation:** the agent only works in **tabs it opened itself**. It cannot list, navigate or click your own tabs.
+- **Privacy filter:** password, hidden and autofill-sensitive fields (credit cards, OTP) **never appear** in snapshots, so the model cannot see them.
+- **Blocked URL patterns:** add them in popup → Advanced, comma separated (e.g. `bank.example.com/*, *.gov/*`). `navigate` refuses those addresses.
+- **Idle mode:** when the agent calls `done`, or after 10 minutes without a command, all agent tabs close and the debugger detaches.
+- The bridge listens on `127.0.0.1` only and pairs by token. Any local process that knows the token can drive the browser; on a single-user machine that is the boundary, as with any local dev tool.
+- Because it uses `chrome.debugger`, Chrome shows a "**… started debugging this browser**" bar on agent tabs. That is intentional: it shows when it's active.
+- **Prompt injection:** a malicious page's text can try to steer the agent. The popup log shows what was done; still, keep an eye on it when the agent works in important accounts.
 
+## Development
+
+The tests need no Chrome; they run end to end against a fake extension:
+
+```bash
+node test/fake-extension.mjs 8799 TEST-TOKEN &   # side 1
+npm test                                          # side 2: two bridges + takeover test
 ```
-node test/fake-extension.mjs 8799 TEST-TOKEN &   # 1. uç
-npm test                                          # 2. uç: iki köprü + devralma testi
-```
 
-## Güvenlik
+Bridge options: `node bin/agent-bridge.mjs --help` (`--port`, `--token`, `--shots`, `--lang tr|en`, `--fresh`).
 
-- **Sekme yalıtımı:** agent yalnız **kendi açtığı sekmelerde** çalışır; kullanıcının sekmelerini listeleyemez, onlara gezinemez, tıklayamaz. Bir işe başlamak zorunda olduğu sekme her zaman `navigate` ile agent'in kendi sekmesidir.
-- **Gizlilik filtresi:** şifre, gizli ve otomatik doldurma duyarlı alanlar (kredi kartı, OTP) anlık görüntüde **hiç görünmez** — model onları asla göremez.
-- **Engellenen adres kalıpları:** popup > Gelişmiş'e virgülle yazın (ör. `banka.example.com/*, *.gov.tr/*`); `navigate` o adresleri reddeder.
-- **Bekleme modu:** agent `done` aracını çağırınca ya da 10 dakika işlem olmayınca tüm agent sekmeleri kapanır, debugger ayrılır (sarı çubuk gider) ve köprü boşa düşer. Sonraki iş yine temiz bir sekmeyle başlar.
-- Köprü yalnız `127.0.0.1` dinler; eşleşme token'la yapılır. Token'ı bilen her yerel süreç tarayıcıyı sürebilir — tek kullanıcılı makinede sınır budur (her yerel geliştirme aracında olduğu gibi).
-- `chrome.debugger` kullandığı için eklenen sekmede Chrome'un "**... tarafından hataları ayıklanıyor**" çubuğu görünür; görmeniz bilerek böyle — ne zaman devrede olduğunu gösterir.
-- **Prompt injection:** agent kötü niyetli bir sayfanın metniyle yönlendirilebilir. Eklenti popup'ındaki işlem günlüğü ne yapıldığını gösterir; yine de önemli hesaplarda agent'a kritik işlem yaptıracokseniz izleyin. Yol haritasındaki *onay modu* her yan etkili işlemde bildirimle onay isteyecek.
+## Roadmap
 
-## Yol haritası
+- [ ] Chrome Web Store release
+- [ ] Site allowlist (act only on listed domains)
+- [ ] Confirm mode (notification + approval before side-effecting actions)
+- [ ] npm package (`npx`)
 
-- [ ] Site izin listesi (yalnız listedeki alan adlarında işlem)
-- [ ] Onay modu (yan etkili işlem öncesi bildirim + onay)
-- [ ] npm paketi (`npx agent-bridge`)
-
-## Lisans
+## License
 
 MIT
