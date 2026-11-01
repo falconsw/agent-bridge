@@ -23,23 +23,17 @@ const connect = () => {
       case "tabs":
         return reply(true, [{ id: 1, title: "Example Page", url: "https://example.com/", active: true }]);
       case "read":
-        return reply(true, {
-          title: "Example Page",
-          url: "https://example.com/",
-          tree: [
-            'heading "Example Domain" #r1',
-            'link "More information..." #r2',
-          ],
-          text: "Hello world. This is a test page.",
-        });
+        return reply(true, '# Example Page\nhttps://example.com/ · scroll 0/0\nh1 "Example Domain"\nlink "More information..." r2');
+      case "find":
+        return reply(true, `link "More information..." r2 → https://www.iana.org/domains/example`);
       case "click":
-        return reply(true, { ok: true, clicked: true, title: "Example Page", url: "https://example.com/", elements: ['link "More information..." #r2'] });
       case "type":
-        return reply(true, { ok: true, title: "Example Page", url: "https://example.com/", elements: [] });
+      case "key":
+        return reply(true, 'ok · Example Page · https://example.com/\nnew (1):\nbutton "Close" r3');
       case "navigate":
-        return reply(true, { tabId: 1, url: msg.args.url });
+        return reply(true, `[tab 1]\n# Example Page\n${msg.args.url} · scroll 0/0\nlink "More information..." r2`);
       case "screenshot":
-        return reply(true, { data: TINY_PNG });
+        return reply(true, { data: TINY_PNG, mimeType: "image/png" });
       case "cleanup":
         return reply(true, { closed: true, mode: "idle" });
       case "ping":

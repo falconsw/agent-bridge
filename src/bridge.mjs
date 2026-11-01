@@ -2,7 +2,11 @@
 // Binds to 127.0.0.1 only. Pairing is trust-on-first-use: the first extension
 // token that connects is pinned to a file, and later bridges accept only it.
 // A fixed --token skips TOFU and requires exact matches instead.
-import { WebSocketServer } from "ws";
+//
+// Several agents at once: the first bridge process owns the port ("primary"); every later
+// one (another Claude Code / Cursor / Codex session) joins it as a "driver" instead of
+// crashing on EADDRINUSE. If the primary exits, a driver takes the port over.
+import WebSocket, { WebSocketServer } from "ws";
 import crypto from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
@@ -11,8 +15,10 @@ import { t } from "./i18n.mjs";
 
 /** Requests in flight: id → { resolve, reject, timer } */
 const pending = new Map();
-let wss = null;
-let ext = null; // connected extension socket (single extension assumed; a new one replaces it)
+let ext = null; // primary: connected extension socket (a new one replaces it)
+let upstream = null; // driver: socket to the primary bridge
+let settings = null;
+let mode = null; // "primary" | "driver"
 
 function makeToken() {
   // Readable pairing token without ambiguous characters (0/O, 1/I).
@@ -37,17 +43,26 @@ function makePinStore(pinFile) {
   return { load, save };
 }
 
-export function startBridge({ port = 8791, token: fixed, pinFile = join(homedir(), ".agent-bridge", "token.json") } = {}) {
-  const pins = makePinStore(pinFile);
-  const pinned = pins.load();
-  const expect = fixed ?? pinned; // fixed --token wins; otherwise TOFU
-  const token = expect ?? makeToken(); // printed so live drivers can read it
-  wss = new WebSocketServer({ host: "127.0.0.1", port });
-  const drivers = new Set(); // live drivers: authenticated sockets that send commands but are not the extension
-  const accepts = (helloToken) => {
+function settle(msg) {
+  const waiting = pending.get(msg.id);
+  if (!waiting) return;
+  pending.delete(msg.id);
+  clearTimeout(waiting.timer);
+  if (msg.ok) waiting.resolve(msg.data);
+  else waiting.reject(new Error(msg.error || t("extError")));
+}
+
+function listen() {
+  const { port, fixed, pins } = settings;
+  let expect = fixed ?? pins.load(); // fixed --token wins; otherwise TOFU
+  const token = expect ?? makeToken();
+  const wss = new WebSocketServer({ host: "127.0.0.1", port });
+  const accepts = (helloToken, role) => {
     if (expect === null) {
-      // TOFU: first token wins and gets pinned for future bridges.
+      // TOFU applies to the extension only; drivers must present the pinned token.
+      if (role !== "extension") return false;
       pins.save(helloToken);
+      expect = helloToken;
       console.error(t("bridgePinned", { token: helloToken }));
       return true;
     }
@@ -67,15 +82,14 @@ export function startBridge({ port = 8791, token: fixed, pinFile = join(homedir(
           return;
         }
         if (!authenticated) {
-          if (msg.type === "hello" && typeof msg.token === "string" && accepts(msg.token)) {
+          const helloRole = msg.role === "driver" ? "driver" : "extension";
+          if (msg.type === "hello" && typeof msg.token === "string" && accepts(msg.token, helloRole)) {
             authenticated = true;
-            role = msg.role === "driver" ? "driver" : "extension";
+            role = helloRole;
             if (role === "extension") {
               ext?.close();
               ext = socket;
               console.error(t("extConnected", { chrome: msg.chrome ?? "?" }));
-            } else {
-              drivers.add(socket);
             }
             socket.send(JSON.stringify({ type: "ready" }));
           } else {
@@ -84,22 +98,16 @@ export function startBridge({ port = 8791, token: fixed, pinFile = join(homedir(
           return;
         }
         if (role === "driver" && msg.id && msg.cmd) {
-          // Live driver: proxy a single command to the extension.
-          request(msg.cmd, msg.args ?? {})
+          // Driver: proxy a single command to the extension.
+          request(msg.cmd, msg.args ?? {}, msg.timeout)
             .then((data) => socket.send(JSON.stringify({ id: msg.id, ok: true, data })))
             .catch((e) => socket.send(JSON.stringify({ id: msg.id, ok: false, error: e.message })));
           return;
         }
         // Reply to a request: { id, ok, data } | { id, ok: false, error }
-        const waiting = pending.get(msg.id);
-        if (!waiting) return;
-        pending.delete(msg.id);
-        clearTimeout(waiting.timer);
-        if (msg.ok) waiting.resolve(msg.data);
-        else waiting.reject(new Error(msg.error || t("extError")));
+        if (role === "extension") settle(msg);
       });
       socket.on("close", () => {
-        drivers.delete(socket);
         if (ext === socket) {
           ext = null;
           console.error(t("extDisconnected"));
@@ -109,9 +117,64 @@ export function startBridge({ port = 8791, token: fixed, pinFile = join(homedir(
   });
 }
 
-/** Sends a command to the extension; resolves with the reply or times out. */
-export function request(cmd, args = {}, timeoutMs = 30_000) {
-  if (!ext || ext.readyState !== 1) {
+/** Joins an already running bridge as a driver; resolves once it accepted our token. */
+function join_() {
+  const { port, fixed, pins } = settings;
+  const token = fixed ?? pins.load();
+  return new Promise((resolve, reject) => {
+    if (!token) return reject(new Error(t("driverNoPin")));
+    const socket = new WebSocket(`ws://127.0.0.1:${port}`);
+    socket.on("open", () => socket.send(JSON.stringify({ type: "hello", token, role: "driver" })));
+    socket.on("message", (raw) => {
+      const msg = JSON.parse(raw.toString());
+      if (msg.type === "ready") {
+        upstream = socket;
+        console.error(t("driverJoined", { port }));
+        return resolve(token);
+      }
+      settle(msg);
+    });
+    socket.on("error", reject);
+    socket.on("close", () => {
+      if (upstream !== socket) return reject(new Error("invalid token"));
+      upstream = null;
+      for (const [id, waiting] of pending) {
+        clearTimeout(waiting.timer);
+        waiting.reject(new Error(t("bridgeRestarted")));
+        pending.delete(id);
+      }
+      // The primary went away: take the port over (or join whoever did).
+      setTimeout(() => connectBridge().catch(() => {}), 300 + Math.random() * 400);
+    });
+  });
+}
+
+/** Becomes the primary if the port is free, otherwise joins the running primary. */
+async function connectBridge() {
+  try {
+    const token = await listen();
+    mode = "primary";
+    return { token, mode };
+  } catch (e) {
+    if (e.code !== "EADDRINUSE") throw e;
+    const token = await join_();
+    mode = "driver";
+    return { token, mode };
+  }
+}
+
+export function startBridge({ port = 8791, token: fixed, pinFile = join(homedir(), ".agent-bridge", "token.json") } = {}) {
+  settings = { port, fixed, pins: makePinStore(pinFile) };
+  return connectBridge();
+}
+
+/** Sends a command to the extension (directly or via the primary bridge); times out. */
+export async function request(cmd, args = {}, timeoutMs = 30_000) {
+  if (mode === "driver" && !upstream) await connectBridge().catch(() => {}); // lazy recovery
+  // The extension reconnects within a few seconds after a bridge (re)start: give it that time.
+  for (let waited = 0; !(ext ?? upstream) && waited < 4000; waited += 200) await new Promise((y) => setTimeout(y, 200));
+  const target = ext ?? upstream;
+  if (!target || target.readyState !== 1) {
     return Promise.reject(new Error(t("extNotConnected")));
   }
   const id = crypto.randomUUID();
@@ -121,6 +184,6 @@ export function request(cmd, args = {}, timeoutMs = 30_000) {
       reject(new Error(t("timeout", { cmd, sn: timeoutMs / 1000 })));
     }, timeoutMs);
     pending.set(id, { resolve, reject, timer });
-    ext.send(JSON.stringify({ id, cmd, args }));
+    target.send(JSON.stringify({ id, cmd, args, timeout: timeoutMs }));
   });
 }

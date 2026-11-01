@@ -33,9 +33,16 @@ const shotsDir = arg("shots", join(process.cwd(), "shots"));
 mkdirSync(shotsDir, { recursive: true });
 
 if (!arg("token")) console.error(t("bridgePairMode"));
-const token = await startBridge({ port, token: arg("token"), pinFile: arg("pin", join(homedir(), ".agent-bridge", "token.json")) });
-console.error(t("bridgeListening", { port }));
-console.error(t("bridgeToken", { token }));
-console.error(t("bridgeHowTo"));
+const { token, mode } = await startBridge({ port, token: arg("token"), pinFile: arg("pin", join(homedir(), ".agent-bridge", "token.json")) });
+if (mode === "primary") {
+  console.error(t("bridgeListening", { port }));
+  console.error(t("bridgeToken", { token }));
+  console.error(t("bridgeHowTo"));
+}
+
+// The MCP client owns this process: when it closes stdin, exit and free the port
+// (otherwise an orphaned bridge keeps 8791 and later sessions cannot start).
+process.stdin.on("end", () => process.exit(0));
+process.stdin.on("close", () => process.exit(0));
 
 await startMcp({ shotsDir });

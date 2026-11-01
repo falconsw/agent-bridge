@@ -43,16 +43,25 @@ claude mcp add agent-bridge -- node /tam/yol/agent-bridge/bin/agent-bridge.mjs
 
 | Araç | İş |
 | --- | --- |
-| `tabs` | Agent'in kendi sekmelerini listeler (kullanıcı sekmeleri görünmez) |
-| `read` | **Erişilebilirlik ağacı**: semantik roller + `#rN` referansları + kısa metin |
-| `click` | `#rN` referansıyla **gerçek fare tıklaması** (CDP Input); yanıt yeni sayfa durumunu içerir |
-| `type` | **Gerçek klavye girdisi** (`Input.insertText`, IME/React uyumlu); `pressEnter` seçeneği |
-| `navigate` | Agent sekmesinde adrese gider; gerekirse yeni agent sekmesi açar |
-| `screenshot` | PNG kaydeder ve döndürür |
-| `eval` | Sayfada JavaScript çalıştırır (dikkatli) |
-| `done` | İşi bitirir: sekmeleri kapatır, bekleme moduna geçer |
+| `navigate` | Adrese gider (ya da `back`/`forward`/`reload`), **yüklenmeyi bekler ve sayfa görüntüsünü döndürür** |
+| `read` | Sayfa görüntüsü: `rol "etiket" rN [durum]` satırları, tablolar `row "hücre | hücre"` olarak. `mode: "all"` tüm metni de ekler; `ref`/`selector`/`viewport` ile daraltılır |
+| `find` | Etiket ve metinde arar, eşleşen satırları ref ve link adresiyle döndürür (`read`'den çok daha ucuz) |
+| `click` / `hover` | `rN`, CSS seçici ya da etiketle **gerçek fare olayı**; sayfa durulana kadar bekler, **yalnız değişeni** döndürür |
+| `type` / `fill` | Gerçek klavye girdisi (`Input.insertText`); `fill` bütün formu tek çağrıda doldurur: metin, `<select>`, onay kutusu/radyo (`true`/`false`) |
+| `select` | Yerel `<select>` seçeneği seçer |
+| `key` | Tuş ve kısayollar: `Enter`, `Escape`, `Tab Tab Enter`, `cmd+a` |
+| `scroll` | Kaydırır, ekranda görünenleri döndürür |
+| `upload` | `<input type=file>` alanına yerel dosya verir (post için fotoğraf/video) |
+| `wait` | Metin/seçici görünene (ya da `gone` ile kaybolana) kadar bekler |
+| `console` / `network` | Sekmenin konsol mesajları ve ağ istekleri |
+| `screenshot` | Görünen alanın JPEG'i (1280 px'e kadar); pahalıdır, yalnız görsel sorular için |
+| `eval` | Sayfada JavaScript çalıştırır (son çare) |
+| `tabs` | Agent sekmeleri; `switchTo`, `close` |
+| `done` | İş tamamen bitince sekmeleri kapatır |
 
-Önerilen akış: önce `read` (envanteri al), sonra `click`/`type`'ta indeksleri kullan.
+**Token tasarrufu:** `navigate` görüntüyü zaten döndürür; eylemler yalnız yeni çıkan öğeleri (ya da yeni sayfayı) bildirir; aynı satırlar birleşir; görünmeyen/`aria-hidden` öğeler atlanır; araç açıklamaları kısa ve İngilizcedir. Açılır pencereler (alert/confirm) otomatik kabul edilip bildirilir, agent sekmesinin açtığı yeni sekmeler agent'e geçer. Shadow DOM ve aynı kökenli iframe'ler de okunur.
+
+**Birden çok agent:** ilk köprü süreci portu alır; sonraki oturumlar (Claude Code, Cursor, Codex…) ona sürücü olarak katılır, ilk süreç kapanınca biri portu devralır.
 
 ## Test
 
@@ -60,7 +69,7 @@ Chrome gerekmez; sahte eklentiyle uçtan uca:
 
 ```
 node test/fake-extension.mjs 8799 TEST-TOKEN &   # 1. uç
-npm test                                          # 2. uç (MCP istemcisi)
+npm test                                          # 2. uç: iki köprü + devralma testi
 ```
 
 ## Güvenlik
@@ -75,7 +84,6 @@ npm test                                          # 2. uç (MCP istemcisi)
 
 ## Yol haritası
 
-- [ ] Dosya yükleme (`DOM.setFileInputFiles`)
 - [ ] Site izin listesi (yalnız listedeki alan adlarında işlem)
 - [ ] Onay modu (yan etkili işlem öncesi bildirim + onay)
 - [ ] npm paketi (`npx agent-bridge`)
