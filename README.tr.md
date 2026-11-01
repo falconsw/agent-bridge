@@ -95,7 +95,15 @@ args = ["-y", "chrome-agent-bridge"]
 
 Diğer MCP istemcileri de aynı şekilde çalışır: komutu `npx`, argümanları `-y chrome-agent-bridge` olan bir **stdio** sunucusu. Ekledikten sonra agent'ı yeniden başlatın.
 
-> Masaüstü uygulamaları (Claude Desktop, Cursor…) kabuğunuzun `PATH`'ini görmez; `npx` bulunamazsa `which npx` çıktısındaki tam yolu yazın (ör. `/opt/homebrew/bin/npx`).
+> Masaüstü uygulamaları (Claude Desktop, Cursor…) kabuğunuzun `PATH`'ini görmez, bu yüzden `npx` (ya da onun ihtiyaç duyduğu `node`) bulunamayabilir. O zaman `which npx` çıktısındaki tam yolu yazın ve `PATH`'i de verin:
+>
+> ```json
+> "agent-bridge": {
+>   "command": "/opt/homebrew/bin/npx",
+>   "args": ["-y", "chrome-agent-bridge"],
+>   "env": { "PATH": "/opt/homebrew/bin:/usr/bin:/bin" }
+> }
+> ```
 
 ### 2. Eklentiyi indir ve Chrome'a yükle
 

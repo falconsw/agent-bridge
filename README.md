@@ -95,7 +95,15 @@ args = ["-y", "chrome-agent-bridge"]
 
 Any other MCP client works the same way: a **stdio** server with command `npx` and arguments `-y chrome-agent-bridge`. Restart the agent after adding it.
 
-> GUI apps (Claude Desktop, Cursor…) don't see your shell `PATH`; if `npx` is not found, use the full path from `which npx` (e.g. `/opt/homebrew/bin/npx`).
+> GUI apps (Claude Desktop, Cursor…) don't see your shell `PATH`, so `npx` (or the `node` it needs) may not be found. Then use the full path from `which npx` and pass your `PATH` along:
+>
+> ```json
+> "agent-bridge": {
+>   "command": "/opt/homebrew/bin/npx",
+>   "args": ["-y", "chrome-agent-bridge"],
+>   "env": { "PATH": "/opt/homebrew/bin:/usr/bin:/bin" }
+> }
+> ```
 
 ### 2. Download the extension and load it into Chrome
 
