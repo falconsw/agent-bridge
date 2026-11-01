@@ -7,7 +7,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { writeFile, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { z } from "zod";
-import { request } from "./bridge.mjs";
+import { randomUUID } from "node:crypto";
+import { request, setAgent } from "./bridge.mjs";
 import { t } from "./i18n.mjs";
 
 const text = (content) => ({ content: [{ type: "text", text: typeof content === "string" ? content : JSON.stringify(content) }] });
@@ -20,6 +21,20 @@ const targetArgs = {
   text: z.string().optional().describe("Visible label of the element"),
   tabId,
 };
+
+// MCP clients identify themselves in `initialize` (clientInfo.name); the model name is not part of it.
+const CLIENT_NAMES = [
+  [/claude-code/i, "Claude Code"],
+  [/claude-ai|claude desktop/i, "Claude Desktop"],
+  [/cursor/i, "Cursor"],
+  [/codex/i, "Codex"],
+  [/opencode/i, "OpenCode"],
+  [/antigravity/i, "Antigravity"],
+  [/windsurf|codeium/i, "Windsurf"],
+  [/copilot|visual studio code|vscode/i, "VS Code"],
+  [/zed/i, "Zed"],
+];
+const prettyClient = (name = "") => CLIENT_NAMES.find(([re]) => re.test(name))?.[1] ?? name;
 
 export async function startMcp({ shotsDir }) {
   const server = new McpServer({ name: "agent-bridge", version: "0.4.2" }, { instructions: t("instructions") });
@@ -175,5 +190,11 @@ export async function startMcp({ shotsDir }) {
     }
   });
 
+  const agentId = randomUUID().slice(0, 8);
+  setAgent({ id: agentId });
+  server.server.oninitialized = () => {
+    const client = server.server.getClientVersion();
+    setAgent({ id: agentId, name: prettyClient(client?.name), version: client?.version });
+  };
   await server.connect(new StdioServerTransport());
 }

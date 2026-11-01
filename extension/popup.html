@@ -3,48 +3,90 @@
 <head>
   <meta charset="utf-8" />
   <style>
-    body { width: 280px; margin: 0; font: 13px/1.4 system-ui, sans-serif; color: #111318; }
-    header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #111318; color: #ffc23a; font-weight: 700; }
-    .dot { width: 9px; height: 9px; border-radius: 50%; background: #666; }
-    .dot.on { background: #3fb950; }
-    main { padding: 12px; display: grid; gap: 10px; }
-    .switch-row { display: flex; justify-content: space-between; align-items: center; }
-    .switch-row > span:first-child { font-weight: 600; }
-    .switch { position: relative; width: 44px; height: 24px; flex: none; }
+    :root { --bg: #f6f7f9; --card: #fff; --line: #e6e8ec; --text: #15171c; --muted: #6b7280; --accent: #ffc23a; --ok: #1f9d55; }
+    * { box-sizing: border-box; }
+    body { width: 300px; margin: 0; font: 13px/1.4 system-ui, -apple-system, sans-serif; color: var(--text); background: var(--bg); }
+
+    header { padding: 12px 14px; background: #15171c; color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .brand { font-weight: 700; font-size: 14px; color: var(--accent); }
+    .state { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 12px; color: #c9cdd4; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; flex: none; }
+    .dot.on { background: #3fb950; box-shadow: 0 0 0 3px rgb(63 185 80 / .25); }
+    .dot.wait { background: var(--accent); }
+
+    .lang { display: flex; background: #2a2d35; border-radius: 6px; padding: 2px; }
+    .lang button { border: 0; background: none; color: #c9cdd4; font: 600 11px system-ui, sans-serif; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+    .lang button.active { background: #fff; color: #15171c; }
+
+    main { padding: 10px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; }
+    .row + .row { border-top: 1px solid var(--line); }
+    .row b { display: block; font-weight: 600; }
+    .row small { display: block; color: var(--muted); font-size: 11px; margin-top: 1px; }
+
+    .switch { position: relative; width: 38px; height: 22px; flex: none; }
     .switch input { display: none; }
-    .slider { position: absolute; inset: 0; background: #ccc; border-radius: 12px; transition: .2s; cursor: pointer; }
-    .slider::before { content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; box-shadow: 0 1px 2px rgb(0 0 0 / .25); }
-    .switch input:checked + .slider { background: #1a7f37; }
-    .switch input:checked + .slider::before { transform: translateX(20px); }
-    .status { font-size: 12px; color: #666; min-height: 16px; }
-    label { font-size: 11px; color: #666; display: block; margin-bottom: 2px; }
-    input, select { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font: inherit; background: #fff; }
-    #token { text-transform: uppercase; color: #555; }
-    details { font-size: 12px; }
-    summary { color: #888; cursor: pointer; }
-    details > div { margin-top: 8px; display: grid; gap: 8px; }
-    .activity { margin: 0; padding: 0 12px 12px; list-style: none; font-size: 11px; color: #555; max-height: 140px; overflow: auto; }
-    .activity li { padding: 2px 0; border-top: 1px solid #eee; }
-    .heading { font-size: 11px; color: #888; padding: 0 12px; text-transform: uppercase; letter-spacing: .04em; }
+    .slider { position: absolute; inset: 0; background: #d1d5db; border-radius: 11px; transition: .2s; cursor: pointer; }
+    .slider::before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; box-shadow: 0 1px 2px rgb(0 0 0 / .25); }
+    .switch input:checked + .slider { background: var(--ok); }
+    .switch input:checked + .slider::before { transform: translateX(16px); }
+
+    .section-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px 6px; }
+    .section-head span { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .link { border: 0; background: none; color: var(--muted); font: 11px system-ui, sans-serif; cursor: pointer; padding: 0; }
+    .link:hover { color: var(--text); }
+    .activity { list-style: none; margin: 0; padding: 0 12px 8px; max-height: 168px; overflow: auto; }
+    .activity li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-top: 1px solid var(--line); font-size: 12px; }
+    .activity li:first-child { border-top: 0; }
+    .activity .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .activity .count { color: var(--muted); }
+    .activity .who { display: inline-block; margin-right: 6px; padding: 0 5px; border-radius: 4px; background: #eef0f3; color: #4b5563; font-size: 10px; font-weight: 600; line-height: 16px; vertical-align: 1px; }
+    .activity time { color: var(--muted); font-size: 11px; flex: none; font-variant-numeric: tabular-nums; }
+    .activity .empty { color: var(--muted); justify-content: center; padding: 8px 0; }
+
+    details summary { list-style: none; padding: 10px 12px; cursor: pointer; color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; }
+    details summary::-webkit-details-marker { display: none; }
+    details summary::after { content: "›"; transition: .2s; }
+    details[open] summary::after { transform: rotate(90deg); }
+    .fields { padding: 0 12px 12px; display: grid; gap: 8px; }
+    .fields label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 3px; }
+    .fields input { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; }
+    .fields input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    #token { font-family: ui-monospace, monospace; color: var(--muted); }
   </style>
 </head>
 <body>
-  <header><span class="dot" id="dot"></span> Agent Bridge <span id="status" class="status"></span></header>
-  <main>
-    <div class="switch-row">
-      <span id="access-label"></span>
-      <label class="switch"><input type="checkbox" id="enabled" /><span class="slider"></span></label>
-    </div>
+  <header>
     <div>
-      <label for="lang" id="lang-label"></label>
-      <select id="lang">
-        <option value="tr">Türkçe</option>
-        <option value="en">English</option>
-      </select>
+      <div class="brand">Agent Bridge</div>
+      <div class="state"><span class="dot" id="dot"></span><span id="status"></span></div>
     </div>
-    <details>
+    <div class="lang" id="lang">
+      <button data-lang="tr">TR</button>
+      <button data-lang="en">EN</button>
+    </div>
+  </header>
+  <main>
+    <div class="card">
+      <div class="row">
+        <div><b id="access-label"></b><small id="access-hint"></small></div>
+        <label class="switch"><input type="checkbox" id="enabled" /><span class="slider"></span></label>
+      </div>
+      <div class="row">
+        <div><b id="cursor-label"></b><small id="cursor-hint"></small></div>
+        <label class="switch"><input type="checkbox" id="cursor" /><span class="slider"></span></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-head"><span id="activity-heading"></span><button class="link" id="clear"></button></div>
+      <ul class="activity" id="activity"></ul>
+    </div>
+
+    <details class="card">
       <summary id="advanced-label"></summary>
-      <div>
+      <div class="fields">
         <div>
           <label for="port" id="port-label"></label>
           <input id="port" type="number" value="8791" />
@@ -60,8 +102,6 @@
       </div>
     </details>
   </main>
-  <p class="heading" id="activity-heading"></p>
-  <ul class="activity" id="activity"></ul>
   <script type="module" src="popup.js"></script>
 </body>
 </html>

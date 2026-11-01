@@ -19,6 +19,11 @@ let ext = null; // primary: connected extension socket (a new one replaces it)
 let upstream = null; // driver: socket to the primary bridge
 let settings = null;
 let mode = null; // "primary" | "driver"
+let agent = null; // { id, name, version } of the MCP client using this process (shown in the extension's log)
+
+export const setAgent = (info) => {
+  agent = info;
+};
 
 function makeToken() {
   // Readable pairing token without ambiguous characters (0/O, 1/I).
@@ -99,7 +104,7 @@ function listen() {
         }
         if (role === "driver" && msg.id && msg.cmd) {
           // Driver: proxy a single command to the extension.
-          request(msg.cmd, msg.args ?? {}, msg.timeout)
+          request(msg.cmd, msg.args ?? {}, msg.timeout, msg.agent)
             .then((data) => socket.send(JSON.stringify({ id: msg.id, ok: true, data })))
             .catch((e) => socket.send(JSON.stringify({ id: msg.id, ok: false, error: e.message })));
           return;
@@ -169,7 +174,7 @@ export function startBridge({ port = 8791, token: fixed, pinFile = join(homedir(
 }
 
 /** Sends a command to the extension (directly or via the primary bridge); times out. */
-export async function request(cmd, args = {}, timeoutMs = 30_000) {
+export async function request(cmd, args = {}, timeoutMs = 30_000, from = agent) {
   if (mode === "driver" && !upstream) await connectBridge().catch(() => {}); // lazy recovery
   // The extension reconnects within a few seconds after a bridge (re)start: give it that time.
   for (let waited = 0; !(ext ?? upstream) && waited < 4000; waited += 200) await new Promise((y) => setTimeout(y, 200));
@@ -184,6 +189,6 @@ export async function request(cmd, args = {}, timeoutMs = 30_000) {
       reject(new Error(t("timeout", { cmd, sn: timeoutMs / 1000 })));
     }, timeoutMs);
     pending.set(id, { resolve, reject, timer });
-    target.send(JSON.stringify({ id, cmd, args, timeout: timeoutMs }));
+    target.send(JSON.stringify({ id, cmd, args, timeout: timeoutMs, agent: from }));
   });
 }

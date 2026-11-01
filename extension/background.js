@@ -22,6 +22,7 @@ let myTabsLoaded = false;
 let retries = 0;
 let activity = [];
 let idleTimer = null;
+let lastOnline = 0; // last time the bridge socket was up; short reconnects are not logged
 
 const T = (key, vars) => t(key, vars);
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
@@ -32,10 +33,34 @@ function makeToken() {
   return `${chunk(4)}-${chunk(4)}`;
 }
 
-const logAction = (cmd, target = "") => {
-  activity = [{ time: new Date().toLocaleTimeString("tr-TR"), cmd, target: target.slice(0, 60) }, ...activity].slice(0, 8);
+// Activity entries are stored as translation keys so the popup can render them in the current language.
+// Internal / read-only commands are not shown; repeats of the same action are collapsed into a counter.
+const QUIET = new Set(["ping", "tabs", "read", "find", "wait", "console", "network", "cleanup"]);
+const logAction = (key, vars = {}, agent = "") => {
+  const last = activity[0];
+  if (last && last.key === key && last.agent === agent && JSON.stringify(last.vars) === JSON.stringify(vars) && Date.now() - last.ts < 60_000) {
+    last.count = (last.count || 1) + 1;
+    last.ts = Date.now();
+  } else activity = [{ ts: Date.now(), key, vars, agent }, ...activity].slice(0, 20);
   chrome.storage.local.set({ activity });
 };
+const hostOf = (url) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+};
+const seenAgents = new Set(); // agent session ids already announced in the log
+function logCommand(cmd, args, agent) {
+  const name = agent?.name || "";
+  if (agent?.id && !seenAgents.has(agent.id)) {
+    seenAgents.add(agent.id);
+    logAction("act_agentJoined", {}, name);
+  }
+  if (QUIET.has(cmd)) return;
+  logAction(`act_${cmd}`, cmd === "navigate" && args.url ? { host: hostOf(args.url) } : {}, name);
+}
 
 // --- agent tab ledger (kept in session storage; survives service worker restarts) ---
 async function loadMyTabs() {
@@ -104,12 +129,12 @@ async function cleanup(reason) {
     attached.delete(id);
     buffers.delete(id);
   }
-  logAction(T("idleMode"), `${reason} · ${T("tabsClosed", { n: list.length })}`);
+  if (list.length) logAction("act_closed", { reason, n: list.length });
   refreshBadge();
 }
 const armIdleTimer = () => {
   clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => cleanup(T("noCommand10")), IDLE_TIMEOUT);
+  idleTimer = setTimeout(() => cleanup("noCommand10"), IDLE_TIMEOUT);
 };
 
 // --- target tab: only agent-owned ones ---
@@ -313,11 +338,24 @@ async function act(tabId, prepareBody, perform) {
 
 const target = (args) => JSON.stringify({ ref: args.ref, selector: args.selector, text: args.text });
 
-async function mouseClick(tabId, { x, y }, { button = "left", clickCount = 1 } = {}) {
+async function mouseClick(tabId, { x, y, label }, { button = "left", clickCount = 1 } = {}) {
+  await showCursor(tabId, `__ab.cursor.move(${x}, ${y})`);
   await send(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
   for (let n = 1; n <= clickCount; n++) {
     await send(tabId, "Input.dispatchMouseEvent", { type: "mousePressed", x, y, button, clickCount: n });
     await send(tabId, "Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button, clickCount: n });
+  }
+  await showCursor(tabId, `__ab.cursor.click(${x}, ${y}, ${JSON.stringify(label ?? "")})`);
+}
+
+/** Draws the on-screen cursor. Purely cosmetic: never let it break the action. */
+async function showCursor(tabId, body) {
+  try {
+    const { cursor } = await chrome.storage.local.get("cursor");
+    if (cursor === false) return;
+    await runInPage(tabId, body);
+  } catch {
+    // The page may have navigated or the overlay may be blocked — visuals are optional.
   }
 }
 
@@ -403,17 +441,20 @@ async function handleCommand(cmd, args = {}) {
     }
     case "hover": {
       const tabId = await resolveTab(args);
-      return act(tabId, `__ab.point(__ab.resolve(${target(args)}))`, (p) =>
-        send(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x: p.x, y: p.y }),
-      );
+      return act(tabId, `__ab.point(__ab.resolve(${target(args)}))`, async (p) => {
+        await showCursor(tabId, `__ab.cursor.move(${p.x}, ${p.y})`);
+        await send(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x: p.x, y: p.y });
+      });
     }
     case "type": {
       const tabId = await resolveTab(args);
       const hasTarget = args.ref !== undefined || args.selector;
       return act(tabId, `__ab.prepareType(${hasTarget ? target(args) : "null"}, ${args.clear !== false})`, async (p) => {
         if (!p.focused) await mouseClick(tabId, p); // custom widgets focus only on a real click
-        if (args.text) await send(tabId, "Input.insertText", { text: args.text });
-        else if (args.clear !== false) await pressKey(tabId, "Backspace");
+        if (args.text) {
+          await send(tabId, "Input.insertText", { text: args.text });
+          await showCursor(tabId, `__ab.cursor.typed(${JSON.stringify(args.text)}, ${p.x ?? "null"}, ${p.y ?? "null"})`);
+        } else if (args.clear !== false) await pressKey(tabId, "Backspace");
         if (args.submit) await pressKey(tabId, "Enter");
       });
     }
@@ -435,7 +476,10 @@ async function handleCommand(cmd, args = {}) {
         } else {
           const p = await runInPage(tabId, `__ab.prepareType(${tgt}, true)`);
           if (!p.focused) await mouseClick(tabId, p);
-          if (String(value ?? "")) await send(tabId, "Input.insertText", { text: String(value) });
+          if (String(value ?? "")) {
+            await send(tabId, "Input.insertText", { text: String(value) });
+            await showCursor(tabId, `__ab.cursor.typed(${JSON.stringify(String(value))}, ${p.x ?? "null"}, ${p.y ?? "null"})`);
+          }
           lines.push(`${name} ✓`);
         }
       }
@@ -554,7 +598,7 @@ async function handleCommand(cmd, args = {}) {
       return list.length ? list.join("\n") : "(no requests captured since the tab was attached)";
     }
     case "cleanup":
-      await cleanup(T("workDone"));
+      await cleanup("workDone");
       return { closed: true, mode: "idle" };
     case "ping":
       return { pong: true };
@@ -602,12 +646,13 @@ function connect() {
       }
       if (msg.type === "ready") {
         refreshBadge();
-        logAction(T("connectedLog"), `port ${port}${myTabs.length ? ` · ${T("agentTabsCount", { n: myTabs.length })}` : ` · ${T("idleShort")}`}`);
+        if (Date.now() - lastOnline > 120_000) logAction("act_connected");
+        lastOnline = Date.now();
         return;
       }
       if (!msg.id) return; // heartbeat etc.
       try {
-        logAction(msg.cmd, JSON.stringify(briefArgs(msg.args ?? {})));
+        logCommand(msg.cmd, msg.args ?? {}, msg.agent);
         const data = await handleCommand(msg.cmd, msg.args ?? {});
         armIdleTimer();
         ws.send(JSON.stringify({ id: msg.id, ok: true, data }));
@@ -616,17 +661,13 @@ function connect() {
       }
     };
     ws.onclose = () => {
+      if (lastOnline) lastOnline = Date.now();
       clearInterval(connect.heartbeat);
       reconnect();
     };
     ws.onerror = () => ws?.close();
   });
 }
-
-const briefArgs = (args) => {
-  const { expression, path, paths, text, fields, ...rest } = args;
-  return rest;
-};
 
 function reconnect() {
   setBadge("…", "#9a6700");
@@ -658,7 +699,7 @@ function disableAccess() {
     closing.onerror = null;
     closing.close();
   }
-  cleanup(T("toggleOff")).then(() => setBadge(""));
+  cleanup("toggleOff").then(() => setBadge(""));
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -682,6 +723,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     reply({ open: ws?.readyState === 1, activity, enabled, port, myTabs: myTabs.length, lang, token });
   }
   if (msg.type === "reconnect") connect();
+  if (msg.type === "clearActivity") {
+    activity = [];
+    chrome.storage.local.set({ activity });
+  }
   return false;
 });
 

@@ -3,7 +3,7 @@
 // Snapshot lines are compact on purpose (token budget): `role "label" rN [state]`.
 // Refs live in the page and stay stable for an element until the document changes.
 export function installAgentLib() {
-  const VERSION = 6;
+  const VERSION = 7;
   if (window.__ab && window.__ab.v === VERSION) return;
 
   const refs = { map: new Map(), rev: new WeakMap(), n: 0 };
@@ -295,7 +295,94 @@ export function installAgentLib() {
       }
     }
     if (r.width === 0 && r.height === 0) warn = "element has no size (hidden?)";
-    return { x: Math.round(x), y: Math.round(y), warn };
+    return { x: Math.round(x), y: Math.round(y), warn, label: cut(labelOf(el, roleOf(el)), 44) };
+  }
+
+  /**
+   * Visual cursor: CDP mouse events are invisible, so draw where the agent acts.
+   * Lives in a closed shadow root so page scripts cannot see or tamper with it.
+   */
+  function makeCursor() {
+    let host = null, root = null, wrap = null, tip = null, idle = null, tipTimer = null;
+    const ensure = () => {
+      if (host && host.isConnected) return;
+      host = document.createElement("div");
+      host.id = "__agent-bridge-cursor";
+      host.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:2147483646;";
+      host.setAttribute("aria-hidden", "true");
+      root = host.attachShadow({ mode: "closed" });
+      root.innerHTML = `
+        <style>
+          .layer { position: fixed; inset: 0; pointer-events: none; }
+          .wrap { position: absolute; left: 0; top: 0; opacity: 0; transition: opacity .2s ease; will-change: transform; }
+          .wrap.on { opacity: 1; }
+          .wrap.move { transition: transform .14s cubic-bezier(.2,.8,.3,1); }
+          .arrow { position: absolute; left: -3px; top: -3px; width: 26px; height: 26px; filter: drop-shadow(0 2px 4px rgb(0 0 0 / .45)); }
+          .tip { position: absolute; left: 20px; top: 22px; max-width: 280px; padding: 4px 9px; border-radius: 8px;
+                 background: #111318; color: #fff; font: 12px/1.35 system-ui, -apple-system, sans-serif;
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transition: opacity .18s;
+                 box-shadow: 0 3px 10px rgb(0 0 0 / .35); }
+          .tip.on { opacity: 1; }
+          .ripple { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
+                    border: 2px solid #ffc23a; background: rgb(255 194 58 / .28); animation: ab-ripple .5s ease-out forwards; }
+          .ring { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%;
+                  border: 2px solid #ffc23a; animation: ab-ring .45s ease-out forwards; }
+          @keyframes ab-ripple { from { transform: scale(.4); opacity: .95; } to { transform: scale(3.6); opacity: 0; } }
+          @keyframes ab-ring { from { transform: scale(.5); opacity: .9; } to { transform: scale(1.7); opacity: 0; } }
+        </style>
+        <div class="layer">
+          <div class="wrap">
+            <svg class="arrow" viewBox="0 0 24 24" width="26" height="26">
+              <path d="M5 2 L5 19.5 L9.6 15.1 L12.4 20.8 L15.3 19.4 L12.5 13.8 L18.9 13.5 Z"
+                    fill="#fff" stroke="#111318" stroke-width="1.1" stroke-linejoin="round"/>
+            </svg>
+            <div class="tip"></div>
+          </div>
+        </div>`;
+      (document.body || document.documentElement).appendChild(host);
+      wrap = root.querySelector(".wrap");
+      tip = root.querySelector(".tip");
+    };
+    const place = (x, y) => {
+      ensure();
+      wrap.classList.remove("move");
+      void wrap.offsetWidth; // restart the transition so the arrow glides to the new spot
+      wrap.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+      wrap.classList.add("move", "on");
+      clearTimeout(idle);
+      idle = setTimeout(() => wrap.classList.remove("on"), 2600);
+    };
+    const say = (text, ms = 1400) => {
+      clearTimeout(tipTimer);
+      tip.textContent = text;
+      tip.classList.add("on");
+      tipTimer = setTimeout(() => tip.classList.remove("on"), ms);
+    };
+    const pulse = (x, y, cls) => {
+      const dot = document.createElement("div");
+      dot.className = cls;
+      dot.style.left = Math.round(x) + "px";
+      dot.style.top = Math.round(y) + "px";
+      root.querySelector(".layer").appendChild(dot);
+      setTimeout(() => dot.remove(), 620);
+    };
+    return {
+      move: (x, y) => place(x, y),
+      click: (x, y, label) => {
+        place(x, y);
+        pulse(x, y, "ring");
+        pulse(x, y, "ripple");
+        if (label) say(label);
+      },
+      typed: (text, x, y) => {
+        if (x != null && y != null) place(x, y);
+        say(`⌨ ${String(text).slice(0, 60)}`, 1600);
+      },
+      hide: () => {
+        clearTimeout(idle);
+        if (wrap) wrap.classList.remove("on");
+      },
+    };
   }
 
   const deepActive = () => {
@@ -388,5 +475,5 @@ export function installAgentLib() {
     return unique.length ? unique.join("\n") : `no match for "${query}" on ${location.href}`;
   }
 
-  window.__ab = { v: VERSION, render, mark, changes, quiet, resolve, point, prepareType, selectOption, fieldInfo, find, refFor };
+  window.__ab = { v: VERSION, render, mark, changes, quiet, resolve, point, prepareType, selectOption, fieldInfo, find, refFor, cursor: makeCursor() };
 }
