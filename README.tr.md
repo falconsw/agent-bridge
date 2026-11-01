@@ -23,36 +23,17 @@ agent (MCP istemcisi)  ⇄ stdio ⇄  agent-bridge  ⇄ WebSocket (127.0.0.1) �
 
 ## Kurulum
 
-> Eklenti henüz Chrome Web Mağazası'nda değil. Şimdilik bu depodan "paketlenmemiş" olarak yüklenir.
+İki parça var, depoyu indirmeniz gerekmez: **MCP sunucusu** npm'den, **Chrome eklentisi** GitHub'daki son sürümden gelir.
 
 **Gereksinimler:** Node.js 18+, Chrome 116+ (ya da başka bir Chromium tarayıcı: Edge, Brave, Arc).
 
-### 1. Kodu indir
-
-```bash
-git clone https://github.com/falconsw/agent-bridge.git
-cd agent-bridge
-npm install
-```
-
-### 2. Eklentiyi Chrome'a yükle (bir kez)
-
-1. `chrome://extensions` adresini aç.
-2. Sağ üstten **Geliştirici modu**'nu aç.
-3. **Paketlenmemiş öğe yükle**'ye tıkla ve bu depodaki `extension/` klasörünü seç.
-4. Araç çubuğundaki yapboz simgesine tıkla ve Agent Bridge'i **sabitle**.
-
-> Klasörü sonradan taşımayın ya da silmeyin: Chrome eklentiyi doğrudan oradan yükler.
-
-### 3. Agent'ına MCP sunucusu olarak ekle
-
-**Mutlak yol** kullanın. Masaüstü uygulamaları (Claude Desktop, Cursor…) kabuğunuzun `PATH`'ini görmez, bu yüzden `node`'un da tam yolunu verin: `which node` yazdırır (ör. `/opt/homebrew/bin/node`). Aşağıdaki `/yol/agent-bridge` yerine depoyu klonladığınız yeri yazın (içindeyken `pwd`).
+### 1. MCP sunucusunu agent'ına ekle
 
 <details open>
 <summary><b>Claude Code</b></summary>
 
 ```bash
-claude mcp add --scope user agent-bridge -- node /yol/agent-bridge/bin/agent-bridge.mjs
+claude mcp add --scope user agent-bridge -- npx -y chrome-agent-bridge
 ```
 </details>
 
@@ -63,8 +44,8 @@ claude mcp add --scope user agent-bridge -- node /yol/agent-bridge/bin/agent-bri
 {
   "mcpServers": {
     "agent-bridge": {
-      "command": "/opt/homebrew/bin/node",
-      "args": ["/yol/agent-bridge/bin/agent-bridge.mjs"]
+      "command": "npx",
+      "args": ["-y", "chrome-agent-bridge"]
     }
   }
 }
@@ -78,8 +59,8 @@ claude mcp add --scope user agent-bridge -- node /yol/agent-bridge/bin/agent-bri
 {
   "mcpServers": {
     "agent-bridge": {
-      "command": "/opt/homebrew/bin/node",
-      "args": ["/yol/agent-bridge/bin/agent-bridge.mjs"]
+      "command": "npx",
+      "args": ["-y", "chrome-agent-bridge"]
     }
   }
 }
@@ -91,44 +72,64 @@ claude mcp add --scope user agent-bridge -- node /yol/agent-bridge/bin/agent-bri
 
 ```toml
 [mcp_servers.agent-bridge]
-command = "/opt/homebrew/bin/node"
-args = ["/yol/agent-bridge/bin/agent-bridge.mjs"]
+command = "npx"
+args = ["-y", "chrome-agent-bridge"]
 ```
 </details>
 
 <details>
-<summary><b>VS Code (Copilot)</b>: <code>.vscode/mcp.json</code> ya da kullanıcı <code>mcp.json</code> dosyası</summary>
+<summary><b>VS Code (Copilot)</b>: <code>.vscode/mcp.json</code> ya da kullanıcı <code>mcp.json</code></summary>
 
 ```json
 {
   "servers": {
     "agent-bridge": {
       "type": "stdio",
-      "command": "/opt/homebrew/bin/node",
-      "args": ["/yol/agent-bridge/bin/agent-bridge.mjs"]
+      "command": "npx",
+      "args": ["-y", "chrome-agent-bridge"]
     }
   }
 }
 ```
 </details>
 
-Diğer MCP istemcileri de aynı şekilde çalışır: komutu `node`, argümanı `/yol/agent-bridge/bin/agent-bridge.mjs` olan bir **stdio** sunucusu. Ekledikten sonra agent'ı yeniden başlatın.
+Diğer MCP istemcileri de aynı şekilde çalışır: komutu `npx`, argümanları `-y chrome-agent-bridge` olan bir **stdio** sunucusu. Ekledikten sonra agent'ı yeniden başlatın.
 
-### 4. Eşleştir (tek anahtar)
+> Masaüstü uygulamaları (Claude Desktop, Cursor…) kabuğunuzun `PATH`'ini görmez; `npx` bulunamazsa `which npx` çıktısındaki tam yolu yazın (ör. `/opt/homebrew/bin/npx`).
+
+### 2. Eklentiyi indir ve Chrome'a yükle
+
+**İndir:** [agent-bridge-extension.zip](https://github.com/falconsw/agent-bridge/releases/latest/download/agent-bridge-extension.zip) (her zaman son sürüm; tüm sürümler [Releases](https://github.com/falconsw/agent-bridge/releases) sayfasında)
+
+1. Zip'i saklayacağınız bir klasöre açın, ör. `~/agent-bridge-extension`. Chrome eklentiyi doğrudan bu klasörden yükler, sonradan silmeyin ya da taşımayın.
+2. `chrome://extensions` adresini açın.
+3. Sağ üstten **Geliştirici modu**'nu açın.
+4. **Paketlenmemiş öğe yükle**'ye tıklayın ve açtığınız klasörü seçin (içinde `manifest.json` olan klasör).
+5. Araç çubuğundaki yapboz simgesine tıklayıp Agent Bridge'i **sabitleyin**.
+
+> Neden `.crx` dosyası değil? Chrome, Windows ve macOS'ta Chrome Web Mağazası dışından gelen `.crx` eklentilerini çalıştırmaz. Mağaza sürümüne kadar yol "Paketlenmemiş öğe yükle".
+
+### 3. Eşleştir (tek anahtar)
 
 Agent Bridge popup'ını açın ve **Agent erişimi** anahtarını açın. İlk bağlantı otomatik eşleşir (ilk bağlanana güven, TOFU) ve eşleşme `~/.agent-bridge/token.json`'a kaydedilir. Durum yeşile döner ("Bağlı").
 
 Sonra agent'ınızdan bir şey isteyin, ör. *"search console'u aç, bu hafta tıklaması düşen sayfaları söyle"*.
 
-Yeniden eşleştirmek gerekirse (ör. eklentiyi yeniden kurduktan sonra) köprüyü bir kez `--fresh` ile başlatın.
+Yeniden eşleştirmek gerekirse (ör. eklentiyi yeniden kurduktan sonra) bir kez `npx -y chrome-agent-bridge --fresh` çalıştırıp Ctrl+C ile kapatın.
 
 ### Güncelleme
 
+- **MCP sunucusu:** `npx` paketi önbelleğe alır; en yeni sürüm için bir kez `npx -y chrome-agent-bridge@latest --help` çalıştırın, sonra agent'ı yeniden başlatın.
+- **Eklenti:** zip'i yeniden indirin, klasörün içeriğini değiştirin ve `chrome://extensions`'ta Agent Bridge'in **Yeniden yükle** düğmesine basın.
+
+### Kaynaktan (geliştirme)
+
 ```bash
-git pull && npm install
+git clone https://github.com/falconsw/agent-bridge.git
+cd agent-bridge && npm install
 ```
 
-Sonra `chrome://extensions`'ta Agent Bridge'in **Yeniden yükle** düğmesine basın ve agent'ı yeniden başlatın.
+`extension/` klasörünü "Paketlenmemiş öğe yükle" ile yükleyin, MCP komutu olarak `node /yol/agent-bridge/bin/agent-bridge.mjs` kullanın.
 
 ## Popup
 
@@ -191,7 +192,7 @@ Köprü seçenekleri: `node bin/agent-bridge.mjs --help` (`--port`, `--token`, `
 - [ ] Chrome Web Mağazası sürümü
 - [ ] Site izin listesi (yalnız listedeki alan adlarında işlem)
 - [ ] Onay modu (yan etkili işlem öncesi bildirim + onay)
-- [ ] npm paketi (`npx`)
+- [x] npm paketi (`npx -y chrome-agent-bridge`)
 
 ## Lisans
 

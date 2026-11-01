@@ -23,36 +23,17 @@ agent (MCP client)  ⇄ stdio ⇄  agent-bridge  ⇄ WebSocket (127.0.0.1) ⇄  
 
 ## Installation
 
-> The extension is not on the Chrome Web Store yet; for now it is loaded from this repository ("unpacked").
+Two parts, nothing to clone: the **MCP server** comes from npm, the **Chrome extension** from the latest GitHub release.
 
 **Requirements:** Node.js 18+, Chrome 116+ (or another Chromium browser: Edge, Brave, Arc).
 
-### 1. Get the code
-
-```bash
-git clone https://github.com/falconsw/agent-bridge.git
-cd agent-bridge
-npm install
-```
-
-### 2. Load the extension into Chrome (once)
-
-1. Open `chrome://extensions`.
-2. Turn on **Developer mode** (top right).
-3. Click **Load unpacked** and select the `extension/` folder of this repository.
-4. Click the puzzle icon in the toolbar and **pin** Agent Bridge so you can see it.
-
-> Do not move or delete the folder afterwards: Chrome loads the extension straight from it.
-
-### 3. Add it to your agent as an MCP server
-
-Use **absolute paths**. GUI apps (Claude Desktop, Cursor…) don't see your shell `PATH`, so give the full path to `node` too: `which node` prints it (e.g. `/opt/homebrew/bin/node`). Replace `/path/to/agent-bridge` below with where you cloned the repo (`pwd` inside it).
+### 1. Add the MCP server to your agent
 
 <details open>
 <summary><b>Claude Code</b></summary>
 
 ```bash
-claude mcp add --scope user agent-bridge -- node /path/to/agent-bridge/bin/agent-bridge.mjs
+claude mcp add --scope user agent-bridge -- npx -y chrome-agent-bridge
 ```
 </details>
 
@@ -63,8 +44,8 @@ claude mcp add --scope user agent-bridge -- node /path/to/agent-bridge/bin/agent
 {
   "mcpServers": {
     "agent-bridge": {
-      "command": "/opt/homebrew/bin/node",
-      "args": ["/path/to/agent-bridge/bin/agent-bridge.mjs"]
+      "command": "npx",
+      "args": ["-y", "chrome-agent-bridge"]
     }
   }
 }
@@ -78,8 +59,8 @@ claude mcp add --scope user agent-bridge -- node /path/to/agent-bridge/bin/agent
 {
   "mcpServers": {
     "agent-bridge": {
-      "command": "/opt/homebrew/bin/node",
-      "args": ["/path/to/agent-bridge/bin/agent-bridge.mjs"]
+      "command": "npx",
+      "args": ["-y", "chrome-agent-bridge"]
     }
   }
 }
@@ -91,8 +72,8 @@ claude mcp add --scope user agent-bridge -- node /path/to/agent-bridge/bin/agent
 
 ```toml
 [mcp_servers.agent-bridge]
-command = "/opt/homebrew/bin/node"
-args = ["/path/to/agent-bridge/bin/agent-bridge.mjs"]
+command = "npx"
+args = ["-y", "chrome-agent-bridge"]
 ```
 </details>
 
@@ -104,31 +85,51 @@ args = ["/path/to/agent-bridge/bin/agent-bridge.mjs"]
   "servers": {
     "agent-bridge": {
       "type": "stdio",
-      "command": "/opt/homebrew/bin/node",
-      "args": ["/path/to/agent-bridge/bin/agent-bridge.mjs"]
+      "command": "npx",
+      "args": ["-y", "chrome-agent-bridge"]
     }
   }
 }
 ```
 </details>
 
-Any other MCP client works the same way: a **stdio** server with command `node` and argument `/path/to/agent-bridge/bin/agent-bridge.mjs`. Restart the agent after adding it.
+Any other MCP client works the same way: a **stdio** server with command `npx` and arguments `-y chrome-agent-bridge`. Restart the agent after adding it.
 
-### 4. Pair (one switch)
+> GUI apps (Claude Desktop, Cursor…) don't see your shell `PATH`; if `npx` is not found, use the full path from `which npx` (e.g. `/opt/homebrew/bin/npx`).
+
+### 2. Download the extension and load it into Chrome
+
+**Download:** [agent-bridge-extension.zip](https://github.com/falconsw/agent-bridge/releases/latest/download/agent-bridge-extension.zip) (always the latest release; all versions are on the [Releases](https://github.com/falconsw/agent-bridge/releases) page)
+
+1. Unzip it into a folder you will keep, e.g. `~/agent-bridge-extension`. Chrome loads the extension straight from this folder, so don't delete or move it later.
+2. Open `chrome://extensions`.
+3. Turn on **Developer mode** (top right).
+4. Click **Load unpacked** and select the unzipped folder (the one that contains `manifest.json`).
+5. Click the puzzle icon in the toolbar and **pin** Agent Bridge.
+
+> Why not a `.crx` file? Chrome on Windows and macOS refuses to run `.crx` extensions that don't come from the Chrome Web Store. Until the store release, "Load unpacked" is the way.
+
+### 3. Pair (one switch)
 
 Open the Agent Bridge popup and turn on **Agent access**. The first connection pairs automatically (trust on first use), and the pairing is saved to `~/.agent-bridge/token.json`. The status turns green ("Connected").
 
 Then just ask your agent something like *"open search console and tell me which pages lost clicks this week"*.
 
-To pair again (for example after reinstalling the extension), start the bridge once with `--fresh`.
+To pair again (for example after reinstalling the extension), run `npx -y chrome-agent-bridge --fresh` once and stop it with Ctrl+C.
 
 ### Updating
 
+- **MCP server:** `npx` caches the package; to get the newest version run `npx -y chrome-agent-bridge@latest --help` once, then restart your agent.
+- **Extension:** download the zip again, replace the folder's contents, and click **Reload** on Agent Bridge in `chrome://extensions`.
+
+### From source (development)
+
 ```bash
-git pull && npm install
+git clone https://github.com/falconsw/agent-bridge.git
+cd agent-bridge && npm install
 ```
 
-Then click **Reload** on Agent Bridge in `chrome://extensions` and restart your agent.
+Load the `extension/` folder with "Load unpacked", and use `node /path/to/agent-bridge/bin/agent-bridge.mjs` as the MCP command.
 
 ## The popup
 
@@ -191,7 +192,7 @@ Bridge options: `node bin/agent-bridge.mjs --help` (`--port`, `--token`, `--shot
 - [ ] Chrome Web Store release
 - [ ] Site allowlist (act only on listed domains)
 - [ ] Confirm mode (notification + approval before side-effecting actions)
-- [ ] npm package (`npx`)
+- [x] npm package (`npx -y chrome-agent-bridge`)
 
 ## License
 
