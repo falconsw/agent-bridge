@@ -494,7 +494,7 @@ async function handleCommand(cmd, args = {}) {
           if (String(value ?? "")) {
             await send(tabId, "Input.insertText", { text: String(value) });
             await showCursor(tabId, `__ab.cursor.typed(${JSON.stringify(String(value))}, ${p.x ?? "null"}, ${p.y ?? "null"})`);
-          }
+          } else await pressKey(tabId, "Backspace");
           lines.push(`${name} ✓`);
         }
       }
