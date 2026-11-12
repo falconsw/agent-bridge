@@ -10,6 +10,7 @@
     header { padding: 12px 14px; background: #15171c; color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .brand { font-weight: 700; font-size: 14px; color: var(--accent); display: flex; align-items: center; gap: 7px; }
     .brand img { width: 20px; height: 20px; }
+    .allow { margin-top: 3px; font-size: 11px; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 210px; }
     .state { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 12px; color: #c9cdd4; }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; flex: none; }
     .dot.on { background: #3fb950; box-shadow: 0 0 0 3px rgb(63 185 80 / .25); }
@@ -50,11 +51,19 @@
     details summary::-webkit-details-marker { display: none; }
     details summary::after { content: "›"; transition: .2s; }
     details[open] summary::after { transform: rotate(90deg); }
-    .fields { padding: 0 12px 12px; display: grid; gap: 8px; }
+    .fields { padding: 0 12px 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
     .fields label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 3px; }
-    .fields input { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; }
-    .fields input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-    #token { font-family: ui-monospace, monospace; color: var(--muted); }
+    .fields input, .fields select { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; }
+    .fields input:focus, .fields select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    #token, #pair-token { font-family: ui-monospace, monospace; }
+    #token { color: var(--muted); }
+    .pair { border-color: #d4a72c; }
+    .pair .fields { padding-top: 12px; }
+    .pair b { font-weight: 600; }
+    .pair small { color: var(--muted); font-size: 11px; }
+    .cmd { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: #f6f7f9; }
+    .cmd code { flex: 1; min-width: 0; overflow-wrap: anywhere; font: 11px ui-monospace, monospace; user-select: all; }
+    .cmd .link { color: #9a6700; font-weight: 600; flex: none; }
   </style>
 </head>
 <body>
@@ -62,6 +71,7 @@
     <div>
       <div class="brand"><img src="icons/icon32.png" alt="" />Agent Bridge</div>
       <div class="state"><span class="dot" id="dot"></span><span id="status"></span></div>
+      <div class="allow" id="allow" hidden></div>
     </div>
     <div class="lang" id="lang">
       <button data-lang="tr">TR</button>
@@ -69,6 +79,15 @@
     </div>
   </header>
   <main>
+    <div class="card pair" id="pair" hidden>
+      <div class="fields">
+        <b id="pair-label"></b>
+        <small id="pair-step1"></small>
+        <div class="cmd"><code id="pair-cmd"></code><button class="link" id="pair-copy"></button></div>
+        <small id="pair-step2"></small>
+        <input id="pair-token" placeholder="XXXX-XXXX" spellcheck="false" autocomplete="off" />
+      </div>
+    </div>
     <div class="card">
       <div class="row">
         <div><b id="access-label"></b><small id="access-hint"></small></div>
@@ -77,6 +96,10 @@
       <div class="row">
         <div><b id="cursor-label"></b><small id="cursor-hint"></small></div>
         <label class="switch"><input type="checkbox" id="cursor" /><span class="slider"></span></label>
+      </div>
+      <div class="row">
+        <div><b id="confirm-label"></b><small id="confirm-hint"></small></div>
+        <label class="switch"><input type="checkbox" id="confirm" /><span class="slider"></span></label>
       </div>
     </div>
 
@@ -94,11 +117,19 @@
         </div>
         <div>
           <label for="token" id="token-label"></label>
-          <input id="token" readonly placeholder="—" spellcheck="false" />
+          <input id="token" placeholder="—" spellcheck="false" autocomplete="off" />
         </div>
         <div>
           <label for="blocked" id="blocked-label"></label>
           <input id="blocked" placeholder="banka.example.com/*, *.gov.tr/*" spellcheck="false" />
+        </div>
+        <div>
+          <label for="eval-mode" id="eval-label"></label>
+          <select id="eval-mode">
+            <option value="on" id="eval-on"></option>
+            <option value="allowlist" id="eval-allowlist"></option>
+            <option value="off" id="eval-off"></option>
+          </select>
         </div>
       </div>
     </details>

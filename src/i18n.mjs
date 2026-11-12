@@ -6,6 +6,11 @@ const dicts = {
     help: `agent-bridge — agent'lara Chrome'da işlem yaptıran köprü
 
 Kullanım: agent-bridge [--port 8791] [--token XXXX-XXXX] [--shots <klasör, varsayılan ~/.agent-bridge/shots>] [--lang tr|en] [--fresh]
+                     [--allow <alan adları>] [--no-eval]
+
+  --allow    Bu çalıştırmada agent yalnız bu alan adlarında çalışır (virgülle): ads.google.com, *.example.com, github.com/falconsw
+             (AGENT_BRIDGE_ALLOW ortam değişkeni de olur). Başka adrese giden sekme durdurulur.
+  --no-eval  eval aracını hiç sunma. eval zaten varsayılan kapalıdır: eklentide Gelişmiş > eval'den açılır.
 
 1. Bu komutu çalıştır
 2. Chrome'da Agent Bridge eklentisinde "Agent erişimi" anahtarını aç (ilk açılışta otomatik eşleşir)
@@ -15,6 +20,7 @@ Araçlar: navigate, read, find, click, type, fill, select, key, scroll, hover, u
     bridgeListening: "[bridge] ws://127.0.0.1:{port} dinleniyor",
     bridgeToken: "[bridge] Token: {token}",
     bridgeHowTo: "[bridge] Chrome'da Agent Bridge eklentisinde \"Agent erişimi\" anahtarını aç, gerisi otomatik.",
+    bridgeAllow: "[bridge] Bu çalıştırma yalnız şu alan adlarında: {allow}",
     bridgePairMode: "[bridge] Eşleşme modu: ilk bağlanan eklenti otomatik tanınır (TOFU).",
     bridgePinned: "[bridge] Eşleşildi / paired — Token: {token}",
     pinRejected: "[bridge] Farklı bir token reddedildi; sıfırlamak için --fresh ile başlat / different token rejected; start with --fresh to re-pin",
@@ -66,6 +72,11 @@ Araçlar: navigate, read, find, click, type, fill, select, key, scroll, hover, u
     help: `agent-bridge — lets terminal agents operate Chrome
 
 Usage: agent-bridge [--port 8791] [--token XXXX-XXXX] [--shots <folder>] [--lang tr|en] [--fresh]
+                     [--allow <domains>] [--no-eval]
+
+  --allow    Limit this run to these domains (comma separated): ads.google.com, *.example.com, github.com/falconsw
+             (or the AGENT_BRIDGE_ALLOW environment variable). A tab that goes anywhere else is stopped.
+  --no-eval  Do not offer the eval tool at all. eval is off by default: turn it on in the extension (Advanced > eval).
 
 1. Run this command
 2. In the Chrome extension, flip "Agent access" on (the first connection pairs automatically)
@@ -75,6 +86,7 @@ Tools: navigate, read, find, click, type, fill, select, key, scroll, hover, uplo
     bridgeListening: "[bridge] ws://127.0.0.1:{port} listening",
     bridgeToken: "[bridge] Token: {token}",
     bridgeHowTo: "[bridge] Flip \"Agent access\" on in the Chrome extension; the rest is automatic.",
+    bridgeAllow: "[bridge] This run is limited to: {allow}",
     bridgePairMode: "[bridge] Pairing mode: the first extension that connects is trusted automatically (TOFU).",
     bridgePinned: "[bridge] Paired — Token: {token}",
     pinRejected: "[bridge] Different token rejected; start with --fresh to re-pin",
@@ -131,7 +143,10 @@ Token-efficient workflow:
 - Use screenshot only for visual questions (charts, layout, images); it costs far more than text.
 - Forms: fill (several fields in one call). Posting media: upload into the file input, then click.
 - If a reply says "covered by …", close the overlay (key "Escape" or click its button) and retry.
+- A field shown as "filled" holds a value you did not type (autofill, remembered account): it is the user's, you cannot read it. Do not try to get it another way; type over it only if the task gives you the value.
+- You never sign in: when a reply says a sign-in is left to the user, stop and ask them to log in in the agent tab, then continue. Ticking consent boxes (terms, privacy policy) waits for the user's approval in the browser; if it is not approved, stop and tell the user instead of trying another way.
 - Call done only when the user's whole task is finished (it closes the tabs).`,
+    instructionsAllow: "- This run is limited by the user to these domains: {allow}. Other sites are refused; you cannot change the list, so tell the user if the task needs another one.",
     desc_tabs: "List agent tabs; switchTo makes one the default target, close closes one.",
     desc_navigate: 'Open a URL (or "back"/"forward"/"reload") in the agent tab, wait for load, return the page snapshot.',
     desc_read: "Snapshot: interactive elements with refs, headings, table rows (mode all adds all text, in order). Scope with ref/selector/viewport.",

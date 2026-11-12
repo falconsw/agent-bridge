@@ -1,6 +1,7 @@
 // Fake extension: exercises the bridge end to end without Chrome.
 // Mimics the real extension: connect, send hello, answer commands with canned data.
 import WebSocket from "ws";
+import { denyReason } from "../extension/policy.js";
 
 const [, , portArg, tokenArg] = process.argv;
 const port = Number(portArg) || 8799;
@@ -31,7 +32,12 @@ const connect = () => {
       case "key":
         return reply(true, 'ok · Example Page · https://example.com/\nnew (1):\nbutton "Close" r3');
       case "navigate":
+        // Same policy module as the real extension, fed with the allow list the bridge attaches.
+        if (denyReason(msg.args.url, { allow: msg.agent?.allow })) return reply(false, `outside the allowed domains (${msg.agent.allow.join(", ")})`);
         return reply(true, `[tab 1]\n# Example Page\n${msg.args.url} · scroll 0/0\nlink "More information..." r2`);
+      case "eval":
+        // mirrors the real extension: eval is opt-in and off by default
+        return reply(false, "eval is off (the default; the user can turn it on in the extension's Advanced settings); use the other tools");
       case "screenshot":
         return reply(true, { data: TINY_PNG, mimeType: "image/png" });
       case "cleanup":

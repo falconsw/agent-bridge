@@ -125,7 +125,7 @@ Agent Bridge popup'ını açın ve **Agent erişimi** anahtarını açın. İlk 
 
 Sonra agent'ınızdan bir şey isteyin, ör. *"search console'u aç, bu hafta tıklaması düşen sayfaları söyle"*.
 
-Yeniden eşleştirmek gerekirse (ör. eklentiyi yeniden kurduktan sonra) bir kez `npx -y chrome-agent-bridge --fresh` çalıştırıp Ctrl+C ile kapatın.
+Yeniden eşleştirmek gerekirse (ör. eklentiyi yeniden kurduktan sonra): popup "Token eşleşmiyor" der ve köprünün token'ını (`~/.agent-bridge/token.json`) panoya alan bir komut gösterir; onu terminalde çalıştırıp sonucu popup'a yapıştırın. Ya da hiçbir köprü çalışmıyorken bir kez `npx -y chrome-agent-bridge --fresh` çalıştırıp Ctrl+C ile kapatın.
 
 ### Güncelleme
 
@@ -148,7 +148,8 @@ cd agent-bridge && npm install
 - **Agent erişimi:** ana anahtar. Kapalıyken agent tarayıcıya dokunamaz.
 - **Hareket imleci:** agent'ın tıkladığı ya da yazdığı yerde sayfada imleç ve tıklama efekti gösterir.
 - **Son işlemler:** sade dilde günlük ("instagram.com açıldı", "Tıkladı ×3"). Her satırda işlemin geldiği uygulamanın rozeti bulunur (Claude Code, Cursor, Codex…).
-- **Gelişmiş:** port, eşleşme token'ı ve engellenen adres kalıpları.
+- **Girişler bende, onay kutularında sor:** agent oturum açmayı size bırakır, sözleşme/politika kutusunu işaretlemeden önce küçük bir eklenti penceresinde sorar (varsayılan açık).
+- **Gelişmiş:** port, eşleşme token'ı, engellenen adres kalıpları ve `eval` ayarı (varsayılan kapalı).
 
 <br clear="right">
 
@@ -168,7 +169,7 @@ cd agent-bridge && npm install
 | `wait` | Metin/seçici görünene (ya da `gone` ile kaybolana) kadar bekler |
 | `console` / `network` | Sekmenin konsol mesajları ve ağ istekleri |
 | `screenshot` | Görünen alanın JPEG'i (1280 px'e kadar); pahalıdır, yalnız görsel sorular için. `~/.agent-bridge/shots` altına kaydedilir |
-| `eval` | Sayfada JavaScript çalıştırır (son çare) |
+| `eval` | Sayfada JavaScript çalıştırır (son çare). Sınırlanabilir ya da kapatılabilir, bkz. [Güvenlik](#güvenlik) |
 | `tabs` | Agent sekmeleri; `switchTo`, `close` |
 | `done` | İş tamamen bitince agent sekmelerini kapatır |
 
@@ -198,8 +199,13 @@ Tüm sonuçlar, görev bazlı tablolar ve işlem başına token: [bench/RESULTS.
 ## Güvenlik
 
 - **Sekme yalıtımı:** agent yalnız **kendi açtığı sekmelerde** çalışır. Sizin sekmelerinizi listeleyemez, onlarda gezinemez, tıklayamaz.
-- **Gizlilik filtresi:** şifre, gizli ve otomatik doldurma duyarlı alanlar (kredi kartı, OTP) sayfa görüntüsünde **hiç görünmez**, model onları göremez.
-- **Engellenen adres kalıpları:** popup → Gelişmiş'e virgülle yazın (ör. `banka.example.com/*, *.gov.tr/*`). `navigate` o adresleri reddeder.
+- **Gizlilik filtresi:** şifre, gizli ve otomatik doldurma duyarlı alanlar (kredi kartı, OTP) sayfa görüntüsünde **hiç görünmez**, model onları göremez. Kimlik alanlarında (e-posta, telefon, ad, adres) ve giriş formunun bütün metin alanlarında agent'ın kendisinin yazmadığı değer (Chrome otomatik doldurma, sitenin hatırladığı hesap) yalnızca `filled` olarak görünür; ekran görüntüsünde yakalandıktan sonra üstü boyanarak kapatılır (kapalı gölge kökleri ve aynı siteden iframe'ler dahil — sayfa çekim sırasında kendi değerini açığa çıkaramaz; başka siteden gelen iframe'e ulaşılmaz), öyle bir sayfada `eval` önce size sorar.
+- **Engellenen adres kalıpları:** popup → Gelişmiş'e virgülle yazın (ör. `banka.example.com/*, *.gov.tr/*`). Agent bu adresleri açamaz; oraya düşen sekme (yönlendirme, bağlantı, betik) `about:blank`'e alınır.
+- **Çalıştırma başına izinli alan adları:** köprüyü `--allow` ile başlatın, agent yalnız orada çalışsın. Örnek: `"args": ["-y", "chrome-agent-bridge", "--allow", "ads.google.com,*.example.com"]` (ya da `AGENT_BRIDGE_ALLOW` ortam değişkeni). `example.com` yalnız o adrestir, `*.example.com` alt alan adlarını ekler, `github.com/falconsw` yolu da sabitler. Her araç bu listeye göre denetlenir, agent sekmesinin vardığı her adres de: listeden çıkan sekme `about:blank`'e alınır, başka yere açılan pencereler kapatılır. Liste komut satırındadır, araç argümanı değildir; yani agent'ın okuduğu bir sayfa onu oturum açık başka bir siteye gitmeye ikna edemez. Etkin liste popup'ta görünür.
+- **Giriş sizde, onay kutuları size sorulur:** agent hiçbir zaman oturum açmaz. Şifre alanı olan bir formu göndermek (düğme ya da Enter) ya da öyle bir sayfada `eval` çalıştırmak üzereyken eklenti reddeder, agent sekmesini öne getirir ve agent'a durup size sormasını söyler; o sekmede girişi siz yaparsınız, agent kaldığı yerden devam eder. Sözleşme, gizlilik, politika, KVKK, rıza içeren bir kutuyu işaretlemeden önce — tıklamanın düştüğü yerde gerçek bir onay kutusu ya da ARIA checkbox/switch/radio varsa — siteyi ve kutuyu gösteren küçük bir pencere açılır; `javascript:` bağlantısına tıklamak ise tamamen reddedilir. Konsol ve ağ çıktılarından da görüntünün gizlediği değerler silinir. **İzin ver** geçirir; **Reddet**, pencereyi kapatmak ya da 60 saniye yanıt vermemek reddeder. Pencere bir eklenti sayfasıdır; düğmelerine ne agent ne de sayfa basabilir. Algılama sezgiseldir (şifre alanları, Türkçe ve İngilizce kutu etiketleri), alışılmadık sayfalar kaçabilir; ikisi birlikte popup'tan kapatılabilir. Agent şifre, OTP ve kart alanlarına da hiç yazmaz.
+- **Kontrollerin yalıtımı:** Okuma, maskeleme ve onay yardımcıları sayfa betiklerinden ayrı bir JavaScript ortamında çalışır. Komutlar tek tek işlenir; biri onayınızı beklerken yalnız o agent'ın komutları bekler. Sekme açılırken geçerli olan izin listesi sekmeyle saklanır ve açtığı pencerelere aktarılır; başka bir çalıştırma bu sınırı genişletemez. Sekmeler onu açan agent'e aittir: aynı köprüdeki başka agent onları listeleyemez, okuyamaz, kapatabilir de. Farklı izinlerle çalışmak için yeni sekme açın. OTP/kart alanları metin çıktısından bağımsız olarak ekran görüntüsü ve `eval` denetiminde taranır.
+- **`eval` kapısı:** popup → Gelişmiş → *eval*: **Açık**, **Yalnız --allow listesi varken** ya da **Kapalı** (varsayılan — eval isteğe bağlıdır; siz açana dek agent sayfada betik çalıştıramaz). Köprüde `--no-eval` aracı o çalıştırma için tamamen kaldırır.
+- **İzin listesinin yapmadığı:** agent'ın *nerede* çalıştığını sınırlar, orada *ne* yapabildiğini değil. İzinli bir sekmedeki `eval` o sitenin oturumunun yapabildiği her şeyi yapabilir; sayfadaki betikler de her web sayfası gibi başka adreslere istek gönderebilir. Liste dışına çıkan sekme geri alındığında o sayfanın isteği çoktan gönderilmiştir; agent sayfayı okumaz, üzerinde işlem yapmaz. Önemli bir hesapta `--allow` ile birlikte eval'i kapatın.
 - **Bekleme modu:** agent `done` çağırınca ya da 10 dakika işlem olmayınca tüm agent sekmeleri kapanır ve debugger ayrılır.
 - Köprü yalnız `127.0.0.1`'i dinler ve token'la eşleşir. Token'ı bilen her yerel süreç tarayıcıyı sürebilir; tek kullanıcılı makinede sınır budur (her yerel geliştirme aracında olduğu gibi).
 - `chrome.debugger` kullandığı için agent sekmelerinde Chrome'un "**… tarayıcıda hata ayıklamaya başladı**" çubuğu görünür. Bu bilerek böyle: ne zaman devrede olduğunu gösterir.
@@ -210,11 +216,10 @@ Tüm sonuçlar, görev bazlı tablolar ve işlem başına token: [bench/RESULTS.
 Testler Chrome gerektirmez, sahte eklentiyle uçtan uca çalışır:
 
 ```bash
-node test/fake-extension.mjs 8799 TEST-TOKEN &   # 1. uç
-npm test                                          # 2. uç: iki köprü + devralma testi
+npm test   # adres politikası, sayfa yardımcıları, service worker (sahte chrome.*), iki köprü + devralma
 ```
 
-Köprü seçenekleri: `node bin/agent-bridge.mjs --help` (`--port`, `--token`, `--shots`, `--lang tr|en`, `--fresh`).
+Köprü seçenekleri: `node bin/agent-bridge.mjs --help` (`--port`, `--token`, `--shots`, `--lang tr|en`, `--fresh`, `--allow`, `--no-eval`).
 
 ## Yol haritası
 
