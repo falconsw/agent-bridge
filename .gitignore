@@ -5,3 +5,4 @@ test/shots/
 .DS_Store
 dist/
 *.tgz
+promo/

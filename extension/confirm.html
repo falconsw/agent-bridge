@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <title>Agent Bridge</title>
+  <style>
+    :root { --bg: #f6f7f9; --card: #fff; --line: #e6e8ec; --text: #15171c; --muted: #6b7280; --accent: #ffc23a; --ok: #1f9d55; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 13px/1.45 system-ui, -apple-system, sans-serif; color: var(--text); background: var(--bg); display: flex; flex-direction: column; min-height: 100vh; }
+    header { padding: 12px 16px; background: #15171c; color: var(--accent); font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 7px; }
+    header img { width: 20px; height: 20px; }
+    main { padding: 14px 16px; flex: 1; }
+    h1 { font-size: 15px; margin: 0 0 4px; }
+    .host { font: 600 14px ui-monospace, monospace; word-break: break-all; }
+    .who { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+    blockquote { margin: 10px 0 0; padding: 8px 10px; background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; max-height: 64px; overflow: auto; word-break: break-word; }
+    .hint { color: var(--muted); font-size: 11px; margin-top: 8px; }
+    footer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--card); }
+    button { flex: 1; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: #fff; font: 600 13px system-ui, sans-serif; cursor: pointer; }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    #allow { background: var(--ok); border-color: var(--ok); color: #fff; }
+  </style>
+</head>
+<body>
+  <header><img src="icons/icon32.png" alt="" />Agent Bridge</header>
+  <main>
+    <div class="who" id="who"></div>
+    <h1 id="what"></h1>
+    <div class="host" id="host"></div>
+    <blockquote id="label" hidden></blockquote>
+    <div class="hint" id="hint"></div>
+  </main>
+  <footer>
+    <button id="deny" autofocus></button>
+    <button id="allow"></button>
+  </footer>
+  <script type="module" src="confirm.js"></script>
+</body>
+</html>

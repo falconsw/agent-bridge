@@ -1,9 +1,9 @@
-// Page-side library, injected (idempotently) in front of every page script as window.__ab.
+// Helper library, injected idempotently into a private isolated world as window.__ab.
 // Written as a real function so it is syntax-checked; background.js ships its source text.
 // Snapshot lines are compact on purpose (token budget): `role "label" rN [state]`.
 // Refs live in the page and stay stable for an element until the document changes.
 export function installAgentLib() {
-  const VERSION = 7;
+  const VERSION = 14;
   if (window.__ab && window.__ab.v === VERSION) return;
 
   const refs = { map: new Map(), rev: new WeakMap(), n: 0 };
@@ -41,9 +41,11 @@ export function installAgentLib() {
     if (iconWords && iconWords.size && text) text = text.split(" ").filter((w) => !iconWords.has(w)).join(" ");
     return text;
   };
+  // Sign-in pages carry the account in the address (…?email=…&login_hint=…): not the agent's to read either.
+  const maskUrl = (url) => String(url).replace(/[^\s\/?&=#:]+(@|%(25)*40)[^\s\/?&=#%]+\.[a-z]{2,}/gi, "•••");
   const cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
 
-  // Passwords, OTP and card fields never appear in snapshots (privacy filter).
+  // Passwords, OTP and card fields never appear in snapshots (privacy filter); see also `personal` below.
   const sensitive = (el) => {
     if (el.localName !== "input") return false;
     const type = (el.getAttribute("type") || "").toLowerCase();
@@ -102,7 +104,8 @@ export function installAgentLib() {
     if (tip && tip.length <= 40 && !label.includes(tip.trim())) bits.push(`title="${clean(tip)}"`);
     if (role === "textbox" || role === "searchbox" || role === "spinbutton") {
       const v = el.isContentEditable ? el.innerText : el.value;
-      if (v) bits.push(`value="${cut(clean(v), 40)}"`);
+      if (v && foreign(el)) bits.push("filled"); // there is a value, but it is not the agent's to read
+      else if (v) bits.push(`value="${cut(clean(v), 40)}"`);
       if (el.getAttribute("placeholder") && !v) bits.push(`ph="${cut(clean(el.getAttribute("placeholder")), 30)}"`);
     } else if (role === "combobox" && el.localName === "select") {
       bits.push(`value="${cut(clean(el.selectedOptions[0]?.text || ""), 30)}"`);
@@ -123,6 +126,27 @@ export function installAgentLib() {
       return getComputedStyle(el).display !== "contents";
     }
     return false;
+  };
+
+  // Fields that say who the user is (e-mail, phone, name, address) and every text field of a sign-in
+  // form: the browser or the site fills them in by itself (autofill, remembered account). The agent
+  // only sees such a value if it typed it; otherwise snapshots say "filled", screenshots show dots.
+  const PERSONAL = /e-?mail|e-?posta|user|login|phone|telefon|gsm|mobile|tckn|kimlik|iban/;
+  const PERSONAL_AUTOFILL = /username|email|tel|name|address|postal|bday/;
+  const own = new WeakMap(); // field → the text the agent typed into it
+  const personal = (el) => {
+    if (el.localName !== "input" && el.localName !== "textarea") return false;
+    const attr = (name) => (el.getAttribute(name) || "").toLowerCase();
+    if (/^(email|tel)$/.test(attr("type")) || /^(email|tel)$/.test(attr("inputmode"))) return true;
+    if (PERSONAL_AUTOFILL.test(attr("autocomplete")) || PERSONAL.test(`${attr("name")} ${attr("id")}`)) return true;
+    return [...(el.closest("form") || el.ownerDocument).querySelectorAll('input[type="password"]')].some((p) => !hidden(p));
+  };
+  const valueOf = (el) => (el.isContentEditable ? el.innerText : el.value);
+  // Anything editable counts: a rich-text field may hold a draft the user wrote, and the agent
+  // reads back only what it typed there itself.
+  const foreign = (el) => {
+    const v = valueOf(el);
+    return !!v && (personal(el) || el.isContentEditable) && own.get(el) !== v;
   };
 
   const inViewport = (el) => {
@@ -193,11 +217,11 @@ export function installAgentLib() {
     return out;
   }
 
-  function render({ ref, selector, mode = "interactive", viewport = false, max = 150 } = {}) {
+  function render({ ref, selector, mode = "interactive", viewport = false, max = 150, signIn = false } = {}) {
     // A selector may first match an empty placeholder (e.g. a loading <tbody>): take the first with content.
     const matches = selector ? [...document.querySelectorAll(selector)] : [];
     const root = ref !== undefined ? refs.map.get(ref) : selector ? matches.find((m) => clean(m.innerText)) || matches[0] : document.body;
-    if (!root) return `# ${document.title}\n${location.href}\n(scope not found)`;
+    if (!root) return `# ${document.title}\n${maskUrl(location.href)}\n(scope not found)`;
     let lines = collect(root, { mode, viewport }).map((x) => x.line);
     // Content-only pages (JSON, articles without controls): an empty control list says nothing — show the text.
     if (mode === "interactive" && lines.length < 4) lines = collect(root, { mode: "all", viewport }).map((x) => x.line);
@@ -211,7 +235,9 @@ export function installAgentLib() {
     }
     const more = lines.length > shown.length ? `\n(+${lines.length - shown.length} more — use find, ref/selector scope, viewport:true or a higher max)` : "";
     const scroll = `scroll ${Math.round(scrollY)}/${Math.max(0, document.documentElement.scrollHeight - innerHeight)}`;
-    return `# ${document.title}\n${location.href} · ${scroll}\n${shown.join("\n")}${more}`;
+    // Say it up front, before the agent tries anything: signing in is the user's step.
+    const login = signIn && hasPassword(document) ? "\n! sign-in form on this page: signing in is left to the user. Stop here, ask the user to sign in in this agent tab, and continue only after they say they have." : "";
+    return `# ${document.title}\n${maskUrl(location.href)} · ${scroll}\n${shown.join("\n")}${more}${login}`;
   }
 
   // --- action support: remember the state before an action, report only what changed after ---
@@ -226,7 +252,7 @@ export function installAgentLib() {
     const added = now.filter((l) => !last.lines.has(l));
     let removed = 0;
     for (const l of last.lines) if (!nowSet.has(l)) removed++;
-    return { url: location.href, title: document.title, added: added.slice(0, max), addedTotal: added.length, removed, urlChanged: last.url !== location.href };
+    return { url: maskUrl(location.href), title: document.title, added: added.slice(0, max), addedTotal: added.length, removed, urlChanged: last.url !== location.href };
   }
 
   /** Resolves when the DOM has been quiet for `idle` ms (or after `cap` ms). */
@@ -399,10 +425,13 @@ export function installAgentLib() {
   };
 
   /** Focuses a field and selects its content (so typed text replaces it). */
-  function prepareType(target, clear) {
+  function prepareType(target, clear, text) {
     const el = target ? resolve(target) : deepActive();
     if (!el || el === document.body) throw new Error("no field to type into — pass ref/selector");
     if (sensitive(el)) throw new Error("refusing to type into a password/OTP/card field");
+    // What the agent writes itself it may read back; text added to a value that was already there stays hidden.
+    if (clear || !el.value) own.set(el, String(text ?? ""));
+    else own.delete(el);
     const p = point(el);
     el.focus();
     const focused = deepActive() === el || el.contains(deepActive());
@@ -416,6 +445,143 @@ export function installAgentLib() {
       } else if (typeof el.select === "function") el.select();
     }
     return { ...p, focused };
+  }
+
+  // Steps that are the user's, not the agent's (background.js decides what happens): signing in
+  // (submitting a form that has a password field) is left to the user entirely, ticking a consent
+  // box (terms, privacy, KVKK…) needs their approval.
+  const CONSENT = /terms|conditions|privacy|polic(y|ies)|consent|agree|accept|gdpr|sözleşme|koşul|şart|gizlilik|politika|kvkk|aydınlatma|rıza|onay|kabul/i;
+  const SIGN_IN = /log ?in|sign ?in|sign ?up|register|continue|next|submit|giriş|oturum|kayıt|kaydol|üye ol|devam|ileri|gönder/i;
+  // Security scanning must not use collect(): it deliberately omits sensitive inputs,
+  // stops at interactive parents and caps results for readable snapshots.
+  function securityElements(root = document) {
+    const found = [];
+    const visit = (scope) => {
+      for (const el of scope.querySelectorAll("*")) {
+        found.push(el);
+        if (el.shadowRoot) visit(el.shadowRoot);
+        if (el.localName === "iframe") {
+          try { if (el.contentDocument) visit(el.contentDocument); } catch {}
+        }
+      }
+    };
+    visit(root);
+    return found;
+  }
+  const hasPassword = (root) => securityElements(root).some((p) =>
+    p.localName === "input" && p.type === "password" && !hidden(p));
+  const consentText = (box, role) => {
+    const label = labelOf(box, role);
+    return CONSENT.test(label) ? label : cut(clean(`${label} ${box.parentElement?.innerText || ""}`), 120);
+  };
+  const isUnchecked = (box) => !(box.checked ?? box.getAttribute("aria-checked") === "true");
+  // Consent controls are often custom widgets: the thing with the role sits above the element the
+  // agent clicked (a span inside role=checkbox). closest() stops at shadow boundaries — walk hosts.
+  const CONSENT_ROLES = '[role="checkbox"],[role="switch"],[role="radio"],[role="menuitemcheckbox"],[role="menuitemradio"]';
+  const controlAncestor = (el) => {
+    for (let n = el; n; ) {
+      if (n.matches?.(CONSENT_ROLES)) return n;
+      const root = n.getRootNode?.();
+      n = root?.host ?? n.parentElement;
+    }
+    return null;
+  };
+
+  /**
+   * Is acting on this element one of those steps? `how` is "click" or "key" (Enter).
+   * Returns { kind: "login" | "consent" | "jslink", label } or null.
+   */
+  function approval(target, how = "click") {
+    const el = target ? resolve(target) : deepActive();
+    if (!el || el === document.body || !el.closest) return null;
+    // A javascript: link is a script the page would run on the agent's click — never the agent's step.
+    const href = el.closest?.("a[href]")?.getAttribute("href")?.trim() || "";
+    if (/^(javascript|vbscript):/i.test(href)) return { kind: "jslink", label: cut(href, 80) };
+    const control = el.closest("label")?.control || controlAncestor(el) || el;
+    const role = roleOf(control);
+    if (role === "checkbox" || role === "radio" || role === "switch" || role === "menuitemcheckbox" || role === "menuitemradio") {
+      if (how !== "click" || !isUnchecked(control)) return null;
+      const label = consentText(control, role);
+      return CONSENT.test(label) ? { kind: "consent", label } : null;
+    }
+    const form = control.closest("form");
+    if (!hasPassword(form || control.ownerDocument)) return null;
+    const button = control.closest('button, input[type="submit"], input[type="image"], [role="button"]');
+    if (how === "key") return form && (control.localName === "input" || button) ? { kind: "login", label: "Enter" } : null;
+    if (!button) return null;
+    const label = labelOf(button, "button") || button.value || "";
+    const submits = form && (button.type === "submit" || button.type === "image");
+    return submits || SIGN_IN.test(label) ? { kind: "login", label } : null;
+  }
+
+  /** The same question for a script that could do those steps itself (eval). */
+  function pageApproval() {
+    if (hasPassword(document)) return { kind: "login", label: "eval" };
+    const elements = securityElements();
+    const boxes = elements.filter((el) => el.matches('input[type="checkbox"], [role="checkbox"], [role="switch"]'));
+    const box = boxes.find((b) => !hidden(b) && isUnchecked(b) && CONSENT.test(consentText(b, "checkbox")));
+    if (box) return { kind: "script", label: consentText(box, "checkbox") };
+    // A script could read what the snapshot hides (an autofilled e-mail, a remembered account).
+    const field = elements.find((el) => (sensitive(el) && !!el.value) || foreign(el));
+    return field ? { kind: "data", label: labelOf(field, "textbox") } : null;
+  }
+
+  /** Screenshots: draws the hidden values as dots while the picture is taken. Returns how many fields. */
+  let veiled = [];
+  function veil(on) {
+    const PROP = "-webkit-text-security";
+    for (const [el, value, priority] of veiled) el.style.setProperty(PROP, value, priority);
+    veiled = [];
+    if (on) {
+      for (const el of securityElements()) {
+        if (!sensitive(el) && !foreign(el)) continue;
+        veiled.push([el, el.style.getPropertyValue(PROP), el.style.getPropertyPriority(PROP)]);
+        el.style.setProperty(PROP, "disc", "important");
+      }
+    }
+    return veiled.length;
+  }
+
+  /**
+   * Rectangles of values the agent must not see in a screenshot, in top-level CSS pixels
+   * (offset by ox/oy when the caller runs this inside a child frame). The service worker
+   * paints these over after the capture, so page scripts cannot undo the masking.
+   * Covers this frame only: the caller runs it in every frame of the tree.
+   */
+  function redactRects(ox = 0, oy = 0) {
+    const rects = [];
+    const visible = (el) => {
+      let r;
+      try { r = el.getBoundingClientRect(); } catch { return null; }
+      if (!r || r.width < 2 || r.height < 2) return null;
+      if (typeof el.checkVisibility === "function" && !el.checkVisibility({ checkVisibilityCSS: true, checkOpacity: true })) return null;
+      return r;
+    };
+    const worth = (el) => {
+      if (!sensitive(el) && !foreign(el)) return false;
+      return !!valueOf(el) || !!el.value;
+    };
+    const visit = (root) => {
+      for (const el of root.querySelectorAll("*")) {
+        if (worth(el) && rects.length < 300) {
+          const r = visible(el);
+          if (r) rects.push({ x: r.left + ox, y: r.top + oy, w: r.width, h: r.height });
+        }
+        if (el.shadowRoot) visit(el.shadowRoot);
+      }
+    };
+    visit(document);
+    return { rects };
+  }
+
+  /** The values snapshots hide (autofilled fields, OTP, drafts): console/network output is scrubbed of them. */
+  function secrets() {
+    const out = new Set();
+    for (const el of securityElements()) {
+      const v = el.isContentEditable ? el.innerText : el.value;
+      if (v && (sensitive(el) || foreign(el))) out.add(String(v).slice(0, 120));
+    }
+    return [...out].slice(0, 40);
   }
 
   /** What fill should do with a field: toggle (checkbox/radio), choose (select) or type. */
@@ -459,7 +625,7 @@ export function installAgentLib() {
     const hits = [...exact, ...partial].slice(0, max).map(({ line, el }) => {
       line = String(line);
       if (/ r\d+/.test(line)) {
-        const href = el.localName === "a" && el.href && !el.href.startsWith("javascript:") ? ` → ${cut(el.href, 100)}` : "";
+        const href = el.localName === "a" && el.href && !el.href.startsWith("javascript:") ? ` → ${cut(maskUrl(el.href), 100)}` : "";
         return line + href;
       }
       // Text: show the surrounding block (e.g. "107.9k stars", not just "stars") and give it a ref.
@@ -472,8 +638,58 @@ export function installAgentLib() {
       return `${line} r${refFor(host && host !== document.body ? host : el)}`;
     });
     const unique = [...new Set(hits.map((h) => h.replace(/ r\d+$/, "")))].map((h) => hits.find((x) => x.startsWith(h)));
-    return unique.length ? unique.join("\n") : `no match for "${query}" on ${location.href}`;
+    return unique.length ? unique.join("\n") : `no match for "${query}" on ${maskUrl(location.href)}`;
   }
 
-  window.__ab = { v: VERSION, render, mark, changes, quiet, resolve, point, prepareType, selectOption, fieldInfo, find, refFor, cursor: makeCursor() };
+  window.__ab = { v: VERSION, maskUrl, render, mark, changes, quiet, resolve, point, prepareType, selectOption, fieldInfo, approval, pageApproval, veil, redactRects, secrets, foreign, find, refFor, cursor: makeCursor() };
+}
+
+/**
+ * Main-world watcher for closed shadow roots (runs before any page script): the page's own
+ * attachShadow is wrapped, so the helper world can be told where the hidden inputs are even
+ * though it can never see into a closed root. Returns how many roots are registered.
+ */
+export function installShadowWatch() {
+  if (window.__abShadowWatch) return window.__abShadowWatch.count;
+  const roots = new Set();
+  const orig = Element.prototype.attachShadow;
+  if (orig) {
+    Element.prototype.attachShadow = function (init) {
+      const root = orig.call(this, init);
+      try { roots.add(root); } catch {}
+      return root;
+    };
+  }
+  // Compact copy of the personal/sensitive field rules in installAgentLib: this script runs in the
+  // page's own world and must not reach into the helper world's closure.
+  const PERSONAL = /e-?mail|e-?posta|user|login|phone|telefon|gsm|mobile|tckn|kimlik|iban/;
+  const AUTOFILL = /username|email|tel|name|address|postal|bday/;
+  const wanted = (el) => {
+    if (el.localName !== "input" && el.localName !== "textarea") return false;
+    if (!el.value) return false;
+    const attr = (n) => (el.getAttribute(n) || "").toLowerCase();
+    if (attr("type") === "password" || /password|one-time-code|cc-|csc/.test(attr("autocomplete"))) return true;
+    if (/^(email|tel)$/.test(attr("type")) || /^(email|tel)$/.test(attr("inputmode"))) return true;
+    return AUTOFILL.test(attr("autocomplete")) || PERSONAL.test(`${attr("name")} ${attr("id")}`);
+  };
+  const scan = (root, out) => {
+    for (const el of root.querySelectorAll("*")) {
+      if (el.shadowRoot) scan(el.shadowRoot, out); // open roots nested inside a closed one
+      if (wanted(el)) {
+        const r = el.getBoundingClientRect();
+        if (r.width > 1 && r.height > 1) out.push({ x: r.left, y: r.top, w: r.width, h: r.height });
+      }
+    }
+  };
+  window.__abShadowWatch = {
+    count: roots.size,
+    rects() {
+      const out = [];
+      for (const root of roots) {
+        try { if (root.host?.isConnected) scan(root, out); } catch {}
+      }
+      return out.slice(0, 200);
+    },
+  };
+  return window.__abShadowWatch.count;
 }

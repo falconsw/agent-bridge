@@ -1,25 +1,57 @@
 // Agent Bridge service worker: connects to the local bridge (ws://127.0.0.1:port)
 // and carries out agent commands via chrome.debugger.
-// SECURITY: the agent only ever sees and uses tabs IT opened (plus popups those tabs open);
-// it cannot see or touch the user's own tabs. Sensitive fields (passwords, OTP, card numbers)
-// never appear in snapshots. Blocked URL patterns are enforced on navigation and actions.
+// SECURITY: the agent only ever sees and uses tabs IT opened (plus popups those tabs open) — and
+// only its own: tabs of another agent on the same bridge are invisible and off limits, as are the
+// user's own tabs. Sensitive fields (passwords, OTP, card numbers) never appear in snapshots, and
+// a value the agent did not type into an identity or sign-in field (autofill, remembered account,
+// a user draft in a contenteditable) is not shown to it either. Screenshots get a second layer
+// outside the page: every such value's rectangle is painted over after the capture, in every
+// frame of the tab's process plus the closed shadow roots the main-world watcher reports —
+// so a page cannot unmask its own values while the picture is taken. Console and network output
+// is scrubbed of those values. Clicking a javascript: link is refused outright. Signing in is
+// left to the user, ticking a consent box (a real checkbox or an ARIA checkbox/switch/radio the
+// click lands inside) waits for their approval. The URL policy (blocked patterns from the popup +
+// the run's allowed domains from --allow) is enforced on every command and on every URL an agent
+// tab lands on; a tab that leaves it is parked on about:blank. eval is opt-in (off by default,
+// per-tab run limits still apply).
 // When the work is done (done tool / 10 minutes without a command) the agent tabs close.
 // TOKEN BUDGET: replies are compact text; actions wait for the page to settle and report
 // only what changed (new elements, URL change), so agents rarely need a separate read.
 import { t, setLang } from "./i18n.js";
-import { installAgentLib } from "./page.js";
+import { installAgentLib, installShadowWatch } from "./page.js";
+import { denyReason } from "./policy.js";
 
 const DEFAULT_PORT = 8791;
 const IDLE_TIMEOUT = 10 * 60 * 1000;
+const APPROVAL_TIMEOUT = 60 * 1000; // how long a "may the agent do this?" window waits for the user
+const APPROVAL_MEMORY = 2 * 60 * 1000; // a repeated action on the same consent box does not ask again
 let ws = null;
 let token = "";
 let port = DEFAULT_PORT;
 let lang = "tr";
 let enabled = false;
 let attached = new Set();
+const mainContexts = new Map(); // tabId → Map(frameId → main-world executionContextId, from Runtime events)
 let myTabs = []; // tabs the agent opened (ordered: newest last)
 let myTabsLoaded = false;
+// One command runs at a time: its policy lives in module state (runAllow, currentAgent…). An
+// agent's own commands keep their order, approval waits included; while one of them waits for
+// the user's answer, the turn goes to the other agents (see waitOffTurn).
+const agentQueues = new Map(); // agent id → tail of that agent's commands
+let turnQueue = Promise.resolve();
+let endTurn = () => {}; // releases the turn of the command that is running
+async function takeTurn() {
+  const before = turnQueue;
+  let release;
+  turnQueue = new Promise((done) => (release = done));
+  await before;
+  endTurn = release;
+}
+let tabAllow = {}; // immutable creation policy, also used by navigation events
+let tabOwner = {}; // tabId → agent id: one agent's tabs are off limits to every other agent
+let runAllow = []; // allowed domains of the run that sent the latest command (--allow); empty = no limit
 let retries = 0;
+let rejected = false; // the bridge refused our token (it is paired with another one): the popup asks for the bridge's
 let activity = [];
 let idleTimer = null;
 let lastOnline = 0; // last time the bridge socket was up; short reconnects are not logged
@@ -65,39 +97,64 @@ function logCommand(cmd, args, agent) {
 // --- agent tab ledger (kept in session storage; survives service worker restarts) ---
 async function loadMyTabs() {
   if (myTabsLoaded) return;
-  const { agentTabs } = await chrome.storage.session.get("agentTabs");
+  const { agentTabs, runAllow: savedAllow, tabAllow: savedTabAllow, tabOwner: savedOwner } =
+    await chrome.storage.session.get(["agentTabs", "runAllow", "tabAllow", "tabOwner"]);
   myTabs = agentTabs ?? [];
+  runAllow = savedAllow ?? [];
+  tabAllow = savedTabAllow ?? Object.fromEntries(myTabs.map((id) => [id, [...runAllow]]));
+  tabOwner = savedOwner ?? {};
   myTabsLoaded = true;
 }
-const saveMyTabs = () => chrome.storage.session.set({ agentTabs: myTabs });
+const saveMyTabs = () => chrome.storage.session.set({ agentTabs: myTabs, tabAllow, tabOwner });
+// Ownership is per agent (the bridge sends the agent's id with every command): one agent's tabs
+// are invisible and closed-off to the others.
+const ownTab = (id) => myTabs.includes(id) && (tabOwner[id] ?? "") === currentAgentId;
+// The list travels with every command (set on the bridge's command line, never by a tool call).
+// Agents sharing the browser may differ: each command is checked against its own run's list.
+async function setRunAllow(list) {
+  await loadMyTabs();
+  const next = Array.isArray(list) ? list.filter((entry) => typeof entry === "string") : [];
+  if (JSON.stringify(next) === JSON.stringify(runAllow)) return;
+  runAllow = next;
+  await chrome.storage.session.set({ runAllow });
+}
 const setBadge = (text = "", color = "#1a7f37") => {
   chrome.action.setBadgeText({ text });
   if (text) chrome.action.setBadgeBackgroundColor({ color });
 };
 const refreshBadge = () => setBadge(ws?.readyState === 1 ? (myTabs.length ? T("badgeOn") : "") : "…", "#1a7f37");
 
-// --- blocked URL patterns (enterprise-style policy; comma-separated globs in storage) ---
-function matchesBlocked(url, patterns) {
-  let host = "";
-  let path = "";
-  try {
-    const u = new URL(url);
-    host = u.hostname;
-    path = u.pathname;
-  } catch {
-    return false;
-  }
-  const target = host + path;
-  return patterns.some((pattern) => {
-    const escaped = pattern.trim().replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
-    return new RegExp(`(^|//|\\.)${escaped.replace(/^\^/, "")}`, "i").test(target) || new RegExp(`^${escaped}$`, "i").test(target);
-  });
+// --- URL policy: blocked patterns (popup) + the run's allowed domains (see policy.js) ---
+async function deniedBy(url, allow = runAllow) {
+  await loadMyTabs();
+  const { blockPatterns } = await chrome.storage.local.get("blockPatterns");
+  return denyReason(url, { blockPatterns: blockPatterns ?? [], allow });
 }
+const denyText = (reason, url, allow = runAllow) =>
+  reason === "blocked" ? T("blockedUrl", { url }) : T("notAllowedUrl", { host: hostOf(url) || url.slice(0, 60), allow: allow.join(", ") });
 
 async function assertAllowed(url) {
-  const { blockPatterns } = await chrome.storage.local.get("blockPatterns");
-  const patterns = blockPatterns ?? [];
-  if (matchesBlocked(url, patterns)) throw new Error(T("blockedUrl", { url }));
+  const reason = await deniedBy(url);
+  if (reason) throw new Error(denyText(reason, url));
+}
+
+/** Takes an agent tab off a page outside the policy, so nothing can be read or done there. */
+async function parkTab(tabId, url) {
+  await chrome.tabs.update(tabId, { url: "about:blank" }).catch(() => {});
+  logAction("act_parked", { host: hostOf(url) });
+}
+
+/** Every command passes here: an agent tab sitting outside the policy is parked and the command refused. */
+async function guardTab(tabId) {
+  const { url = "" } = await chrome.tabs.get(tabId);
+  await loadMyTabs();
+  const { blockPatterns = [] } = await chrome.storage.local.get("blockPatterns");
+  const commandReason = denyReason(url, { blockPatterns, allow: runAllow });
+  const policy = commandReason ? runAllow : (tabAllow[tabId] ?? []);
+  const reason = commandReason || denyReason(url, { blockPatterns, allow: policy });
+  if (!reason) return;
+  await parkTab(tabId, url);
+  throw new Error(`${denyText(reason, url, policy)} ${T("tabParked")}`);
 }
 
 // --- per-tab buffers: console, network, events to report with the next reply ---
@@ -118,10 +175,16 @@ const drainNotes = (tabId) => {
 };
 
 // --- idle mode: close tabs, detach debugger ---
+// "workDone" (the agent's done tool) closes that agent's tabs only; the user's toggle-off and the
+// global idle timeout close everything.
 async function cleanup(reason) {
   clearTimeout(idleTimer);
-  const list = myTabs;
-  myTabs = [];
+  const list = reason === "workDone" ? myTabs.filter((id) => ownTab(id)) : myTabs;
+  myTabs = myTabs.filter((id) => !list.includes(id));
+  for (const id of list) {
+    delete tabAllow[id];
+    delete tabOwner[id];
+  }
   await saveMyTabs();
   for (const id of list) {
     await chrome.debugger.detach({ tabId: id }).catch(() => {});
@@ -137,15 +200,19 @@ const armIdleTimer = () => {
   idleTimer = setTimeout(() => cleanup("noCommand10"), IDLE_TIMEOUT);
 };
 
-// --- target tab: only agent-owned ones ---
+// --- target tab: only tabs this agent opened ---
 async function resolveTab(args) {
   await loadMyTabs();
+  let tabId;
   if (args.tabId !== undefined) {
-    if (!myTabs.includes(args.tabId)) throw new Error(T("tabNotOwned"));
-    return args.tabId;
+    if (!ownTab(args.tabId)) throw new Error(T("tabNotOwned"));
+    tabId = args.tabId;
+  } else {
+    tabId = [...myTabs].reverse().find((id) => ownTab(id));
+    if (tabId === undefined) throw new Error(T("noAgentTab"));
   }
-  if (!myTabs.length) throw new Error(T("noAgentTab"));
-  return myTabs[myTabs.length - 1];
+  await guardTab(tabId);
+  return tabId;
 }
 
 // Claude-style tab strip marker: agent tabs live in one yellow "Agent" tab group per window,
@@ -163,19 +230,52 @@ async function groupAgentTab(tabId) {
 }
 
 // Popups opened by an agent tab (target=_blank, window.open) belong to the agent too.
+// Chrome often creates them without a URL yet: until one shows a page inside the policy it is
+// remembered here, so a popup that turns out to point outside is closed instead of parked.
+const newPopups = new Map(); // tabId → opener tabId
+const closePopup = async (tabId, openerTabId, reason, url) => {
+  newPopups.delete(tabId);
+  await chrome.tabs.remove(tabId).catch(() => {});
+  bufferOf(openerTabId).notes.push(`new tab closed: ${denyText(reason, url, tabAllow[openerTabId] ?? [])}`);
+  logAction("act_parked", { host: hostOf(url) });
+};
 chrome.tabs.onCreated.addListener(async (tab) => {
   await loadMyTabs();
   if (tab.openerTabId === undefined || !myTabs.includes(tab.openerTabId)) return;
+  const url = tab.pendingUrl || tab.url || "";
+  const reason = await deniedBy(url, tabAllow[tab.openerTabId] ?? []);
+  if (reason) return closePopup(tab.id, tab.openerTabId, reason, url);
+  newPopups.set(tab.id, tab.openerTabId);
   myTabs.push(tab.id);
+  tabAllow[tab.id] = [...(tabAllow[tab.openerTabId] ?? [])];
+  tabOwner[tab.id] = tabOwner[tab.openerTabId] ?? "";
   await saveMyTabs();
   bufferOf(tab.openerTabId).notes.push(`new tab opened: [${tab.id}] (now the default tab)`);
   attachDebugger(tab.id).catch(() => {});
   groupAgentTab(tab.id);
 });
+// Redirects, links and page scripts can move an agent tab anywhere: check every URL it lands on.
+chrome.tabs.onUpdated.addListener(async (tabId, change) => {
+  if (!change.url) return;
+  await loadMyTabs();
+  if (!myTabs.includes(tabId)) return;
+  const reason = await deniedBy(change.url, tabAllow[tabId] ?? []);
+  const openerTabId = newPopups.get(tabId);
+  if (!reason) {
+    if (change.url !== "about:blank") newPopups.delete(tabId);
+    return;
+  }
+  if (openerTabId !== undefined) return closePopup(tabId, openerTabId, reason, change.url);
+  await parkTab(tabId, change.url);
+  bufferOf(tabId).notes.push(`${denyText(reason, change.url, tabAllow[tabId] ?? [])} ${T("tabParked")}`);
+});
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   await loadMyTabs();
   attached.delete(tabId);
+  delete tabAllow[tabId];
+  delete tabOwner[tabId];
   buffers.delete(tabId);
+  newPopups.delete(tabId);
   if (!myTabs.includes(tabId)) return;
   myTabs = myTabs.filter((id) => id !== tabId);
   await saveMyTabs();
@@ -206,17 +306,24 @@ async function attachDebugger(tabId) {
   try {
     await chrome.debugger.attach({ tabId }, "1.3");
   } catch (e) {
+    // Another extension's frame in the page (password managers on sign-in pages) blocks the debugger.
+    if (/chrome-extension:\/\/ URL of different extension/i.test(String(e.message))) throw new Error(T("attachBlocked"));
     // After a service worker restart the debugger may still be attached: reuse it.
     if (!/already attached/i.test(String(e.message))) throw e;
   }
   attached.add(tabId);
   for (const method of ["Page.enable", "Runtime.enable", "Network.enable"]) await send(tabId, method).catch(() => {});
+  // The shadow watcher runs in the page's main world (every frame, before its scripts): it is how
+  // closed shadow roots — invisible to the helper world — report their personal-field rectangles.
   await send(tabId, "Page.addScriptToEvaluateOnNewDocument", { source: MARK_SCRIPT }).catch(() => {});
+  await send(tabId, "Page.addScriptToEvaluateOnNewDocument", { source: SHADOW_SCRIPT }).catch(() => {});
   await send(tabId, "Runtime.evaluate", { expression: MARK_SCRIPT }).catch(() => {});
+  await send(tabId, "Runtime.evaluate", { expression: SHADOW_SCRIPT }).catch(() => {});
 }
 
 chrome.debugger.onDetach.addListener(({ tabId }, reason) => {
   attached.delete(tabId);
+  mainContexts.delete(tabId);
   if (reason === "canceled_by_user") bufferOf(tabId).notes.push("user detached the debugger (cancelled the debugging bar)");
 });
 
@@ -253,20 +360,59 @@ chrome.debugger.onEvent.addListener(({ tabId }, method, params) => {
       if (req) pushCapped(b.net, { ...req, type: params.type, status: params.canceled ? "canceled" : `failed ${params.errorText}` });
       break;
     }
+    case "Runtime.executionContextCreated": {
+      // Main-world contexts per frame: the closed-shadow watcher lives in the page world and can
+      // only be asked there (isolated worlds cannot see closed roots).
+      const c = params.context ?? {};
+      if (c.auxData?.frameId && c.auxData.type === "default") {
+        if (!mainContexts.has(tabId)) mainContexts.set(tabId, new Map());
+        mainContexts.get(tabId).set(c.auxData.frameId, c.executionContextId);
+      }
+      break;
+    }
   }
 });
 
+// Same rule as maskUrl in page.js: an address that names the account (…?email=…) is not shown to the agent.
+const maskUrl = (url) => String(url).replace(/[^\s\/?&=#:]+(@|%(25)*40)[^\s\/?&=#%]+\.[a-z]{2,}/gi, "•••");
+
+// Console and network output can carry the same values the snapshot hides (a page logging the
+// user's e-mail or an OTP): scrub them out before the agent sees them. Best effort — the page
+// can still log a secret that never lived in a field; no filter can know that one.
+async function redactSecrets(tabId, text) {
+  let out = String(text);
+  try {
+    const vals = await runInPage(tabId, `__ab.secrets()`);
+    if (Array.isArray(vals)) for (const v of vals) if (v && String(v).length > 3) out = out.split(String(v)).join("•••");
+  } catch {}
+  return maskUrl(out);
+}
+
 // --- page scripts ---
 const LIB = `(${installAgentLib.toString()})();`;
+const SHADOW_SCRIPT = `(${installShadowWatch.toString()})();`;
 const NAV_ERROR = /context was destroyed|Cannot find context|navigated or closed|Inspected target|No frame|not attached/i;
 
+// Re-resolve on every call: navigation destroys contexts. Never fall back to the page world.
+async function helperContext(tabId) {
+  const { frameTree } = await send(tabId, "Page.getFrameTree");
+  const { executionContextId } = await send(tabId, "Page.createIsolatedWorld", {
+    frameId: frameTree.frame.id,
+    worldName: "agent-bridge-private",
+  });
+  if (!Number.isInteger(executionContextId)) throw new Error("isolated helper context unavailable");
+  return executionContextId;
+}
+
 /** Runs `body` (an expression; window.__ab is available) in the page and returns its value. */
-async function runInPage(tabId, body, { lib = true } = {}) {
+async function runInPage(tabId, body, { lib = true, mainWorld = false } = {}) {
+  await guardTab(tabId); // the page may have moved since the command started (redirect, click, script)
   await attachDebugger(tabId);
   let reply;
   try {
     reply = await send(tabId, "Runtime.evaluate", {
       expression: lib ? `${LIB}\n${body}` : body,
+      ...(mainWorld ? {} : { contextId: await helperContext(tabId) }),
       returnByValue: true,
       awaitPromise: true,
       userGesture: true,
@@ -303,6 +449,8 @@ async function waitLoad(tabId, { expectStart = false, timeout = 15_000 } = {}) {
 
 /** Full (capped) snapshot once the page has settled; retries across late navigations. */
 async function snapshot(tabId, opts = {}) {
+  const { confirmSensitive } = await chrome.storage.local.get("confirmSensitive");
+  opts = { ...opts, signIn: confirmSensitive !== false };
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       return await runInPage(tabId, `__ab.quiet(250, 1500).then(() => __ab.render(${JSON.stringify(opts)}))`);
@@ -325,7 +473,6 @@ const withNotes = (tabId, text) => {
  * - new page / URL change → a capped snapshot of the new page.
  */
 async function act(tabId, prepareBody, perform) {
-  await assertAllowed((await chrome.tabs.get(tabId)).url ?? "");
   const prepared = await runInPage(tabId, `(() => { __ab.mark(); return ${prepareBody}; })()`);
   await perform(prepared);
   await sleep(120);
@@ -352,6 +499,84 @@ async function act(tabId, prepareBody, perform) {
 }
 
 const target = (args) => JSON.stringify({ ref: args.ref, selector: args.selector, text: args.text });
+
+// --- the user's steps: signing in is left to the user, ticking consent boxes needs their approval ---
+// The question is asked in an extension window: neither the agent (it only reaches its own tabs)
+// nor the page can press the buttons. No answer in time, or closing the window, means no.
+const approvals = new Map(); // id → { info, finish, windowId }
+const granted = new Map(); // "tab|host|kind|label" → valid until
+let currentAgent = ""; // name of the agent whose command is running (shown in the approval window)
+let currentAgentId = ""; // id of the agent whose command is running (tab ownership)
+
+/** Waits for `pending` without holding the turn, then takes it back as the same agent and run. */
+async function waitOffTurn(pending) {
+  const mine = { allow: runAllow, agent: currentAgent, agentId: currentAgentId };
+  endTurn();
+  try {
+    return await pending;
+  } finally {
+    await takeTurn();
+    await setRunAllow(mine.allow);
+    currentAgent = mine.agent;
+    currentAgentId = mine.agentId;
+  }
+}
+
+function askUser(info) {
+  const id = crypto.randomUUID();
+  return new Promise((resolve) => {
+    const finish = (allow) => {
+      const entry = approvals.get(id);
+      if (!entry) return;
+      approvals.delete(id);
+      clearTimeout(timer);
+      if (entry.windowId !== undefined) chrome.windows.remove(entry.windowId).catch(() => {});
+      resolve(allow);
+    };
+    const timer = setTimeout(() => finish(false), APPROVAL_TIMEOUT);
+    approvals.set(id, { info, finish });
+    chrome.windows
+      .create({ url: chrome.runtime.getURL(`confirm.html?id=${id}`), type: "popup", width: 420, height: 330, focused: true })
+      .then((win) => {
+        if (approvals.has(id)) approvals.get(id).windowId = win.id;
+        else chrome.windows.remove(win.id).catch(() => {});
+      })
+      .catch(() => finish(false));
+  });
+}
+chrome.windows.onRemoved.addListener((windowId) => {
+  for (const entry of approvals.values()) if (entry.windowId === windowId) entry.finish(false);
+});
+
+/**
+ * `check` is a page expression (__ab.approval / __ab.pageApproval) that names the step, if it is one.
+ * Sign-in: never done by the agent, not even with a yes; the tab is shown to the user instead.
+ * Consent box: the user is asked. A javascript: link is refused outright, in every setting.
+ */
+async function requireApproval(tabId, check) {
+  const { confirmSensitive } = await chrome.storage.local.get("confirmSensitive");
+  const need = await runInPage(tabId, check);
+  if (need?.kind === "jslink") {
+    const tab = await chrome.tabs.get(tabId);
+    logAction("act_jslink", { host: hostOf(tab.url ?? "") }, currentAgent);
+    throw new Error(T("jslinkRefused", { host: hostOf(tab.url ?? "") || T("thisPage") }));
+  }
+  if (confirmSensitive === false || !need) return;
+  const tab = await chrome.tabs.get(tabId);
+  const host = hostOf(tab.url ?? "") || T("thisPage");
+  if (need.kind === "login") {
+    await chrome.tabs.update(tabId, { active: true }).catch(() => {});
+    await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+    logAction("act_handoff", { host }, currentAgent);
+    throw new Error(T("loginHandoff", { host }));
+  }
+  const key = [tabId, host, need.kind, need.label].join("|");
+  if (granted.get(key) > Date.now()) return;
+  const allow = await waitOffTurn(askUser({ kind: need.kind, label: String(need.label ?? "").slice(0, 160), host, agent: currentAgent }));
+  logAction(allow ? "act_approved" : "act_denied", { host }, currentAgent);
+  if (!allow) throw new Error(T("approvalDenied", { what: T(`approval_${need.kind}`), host }));
+  granted.set(key, Date.now() + APPROVAL_MEMORY);
+}
 
 async function mouseClick(tabId, { x, y, label }, { button = "left", clickCount = 1 } = {}) {
   await showCursor(tabId, `__ab.cursor.move(${x}, ${y})`);
@@ -409,17 +634,114 @@ async function pressKey(tabId, combo) {
   await send(tabId, "Input.dispatchKeyEvent", { type: "keyUp", ...base });
 }
 
+/**
+ * Every rectangle the snapshot hides, across the frames of this debugger session, in top-level
+ * CSS pixels: each frame runs the same collector in its own isolated world (cross-origin frames
+ * too), offset by its iframe's position. Closed shadow roots report through the main-world
+ * watcher (SHADOW_SCRIPT). Not covered: an iframe Chrome runs in another process (a different
+ * site) is not in this session's frame tree; the snapshot cannot read into it either.
+ */
+async function personalRects(tabId) {
+  const rects = [];
+  const collect = async (frameId, ox, oy) => {
+    const contextId = frameId === undefined ? await helperContext(tabId) : await frameWorld(tabId, frameId);
+    const reply = await send(tabId, "Runtime.evaluate", { expression: `${LIB}\n__ab.redactRects(${ox}, ${oy})`, contextId, returnByValue: true });
+    if (reply.exceptionDetails) throw new Error(String(reply.exceptionDetails.exception?.description || reply.exceptionDetails.text));
+    return reply.result?.value ?? { rects: [] };
+  };
+  // The watcher runs in each frame's main world; ask it there (contextId from Runtime events).
+  // A stored context can be stale (the document navigated since): for the main frame a
+  // context-less evaluate — the main world of the current document — is the safe fallback.
+  const watcherRects = async (frameId, ox, oy, isRoot) => {
+    const evalWatch = async (contextId) => {
+      const reply = await send(tabId, "Runtime.evaluate", { expression: `window.__abShadowWatch ? __abShadowWatch.rects() : []`, ...(contextId ? { contextId } : {}), returnByValue: true });
+      return reply.result?.value;
+    };
+    let out;
+    try { out = await evalWatch(mainContexts.get(tabId)?.get(frameId)); } catch {}
+    if (!Array.isArray(out) && isRoot) { try { out = await evalWatch(undefined); } catch {} }
+    if (Array.isArray(out)) for (const r of out) rects.push({ x: r.x + ox, y: r.y + oy, w: r.w, h: r.h });
+  };
+  // Where a child frame sits on screen: the content box of its owner element, which the debugger
+  // reports in top-level CSS pixels. Asked per frame id, never matched by position in a list:
+  // hidden iframes have no box and the frame tree is not in DOM order.
+  const frameOrigin = async (frameId) => {
+    const { backendNodeId } = await send(tabId, "DOM.getFrameOwner", { frameId });
+    const [x, y] = (await send(tabId, "DOM.getBoxModel", { backendNodeId })).model.content;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error("no box");
+    return { x, y };
+  };
+  const { frameTree } = await send(tabId, "Page.getFrameTree");
+  const walk = async (frame, ox, oy, isRoot = true) => {
+    const own = await collect(frame.frame.id, ox, oy);
+    rects.push(...(own.rects ?? []));
+    await watcherRects(frame.frame.id, ox, oy, isRoot);
+    for (const child of frame.childFrames ?? []) {
+      // No box (a hidden iframe: nothing of it is on screen either) or an unreachable child
+      // must not abort the rest of the walk.
+      try {
+        const origin = await frameOrigin(child.frame.id);
+        await walk(child, origin.x, origin.y, false);
+      } catch {}
+    }
+  };
+  await walk(frameTree, 0, 0);
+  return rects.slice(0, 300);
+}
+
+/** An isolated helper world for a specific frame (child frames are outside the main frame's world). */
+async function frameWorld(tabId, frameId) {
+  const world = await send(tabId, "Page.createIsolatedWorld", { frameId, worldName: "agent-bridge-private" });
+  if (!Number.isInteger(world.executionContextId)) throw new Error("isolated helper context unavailable");
+  return world.executionContextId;
+}
+
+/** Paints over the personal-value rectangles after the capture: page scripts cannot reach this. */
+async function redactPixels(image, vp, rects) {
+  // chrome.debugger hands us bare base64 (no data: prefix); fetch needs a URL.
+  const blob = await (await fetch(image.startsWith("data:") ? image : `data:image/jpeg;base64,${image}`)).blob();
+  const img = await createImageBitmap(blob);
+  const scale = img.width / vp.clientWidth;
+  const canvas = new OffscreenCanvas(img.width, img.height);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+  ctx.fillStyle = "#111318";
+  // Rects are relative to the layout viewport, the picture starts at the visual one: the two
+  // differ by offsetX/Y (pinch zoom), not by the scroll position (pageX/Y).
+  const dx = vp.offsetX ?? 0;
+  const dy = vp.offsetY ?? 0;
+  for (const r of rects) ctx.fillRect((r.x - dx) * scale - 2, (r.y - dy) * scale - 2, r.w * scale + 4, r.h * scale + 4);
+  const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.7 });
+  const bytes = new Uint8Array(await out.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return btoa(bin);
+}
+
 async function screenshot(tabId) {
-  await attachDebugger(tabId);
-  const { cssVisualViewport: vp } = await send(tabId, "Page.getLayoutMetrics");
-  // CSS-pixel JPEG capped at 1280px wide: a fraction of a retina PNG's size and image tokens.
-  const scale = Math.min(1, 1280 / vp.clientWidth);
-  const reply = await send(tabId, "Page.captureScreenshot", {
-    format: "jpeg",
-    quality: 70,
-    clip: { x: vp.pageX, y: vp.pageY, width: vp.clientWidth, height: vp.clientHeight, scale },
-  });
-  return { data: reply.data, mimeType: "image/jpeg" };
+  // Values the snapshot hides (autofilled e-mail etc.) are drawn as dots for the picture; no veil, no picture.
+  if (await runInPage(tabId, `__ab.veil(true)`)) await sleep(60);
+  try {
+    const { cssVisualViewport: vp } = await send(tabId, "Page.getLayoutMetrics");
+    // CSS-pixel JPEG capped at 1280px wide: a fraction of a retina PNG's size and image tokens.
+    const scale = Math.min(1, 1280 / vp.clientWidth);
+    const reply = await send(tabId, "Page.captureScreenshot", {
+      format: "jpeg",
+      quality: 70,
+      clip: { x: vp.pageX, y: vp.pageY, width: vp.clientWidth, height: vp.clientHeight, scale },
+    });
+    // Second layer, outside the page: paint over every personal value's rectangle. This survives
+    // closed shadow roots and pages that strip the CSS veil afterwards.
+    try {
+      const data = await redactPixels(reply.data, vp, await personalRects(tabId));
+      return { data, mimeType: "image/jpeg" };
+    } catch (e) {
+      bufferOf(tabId).notes.push(`pixel redaction unavailable (${String(e.message).slice(0, 80)}); the CSS veil was applied for this shot`);
+      return { data: reply.data, mimeType: "image/jpeg" };
+    }
+  } finally {
+    await runInPage(tabId, `__ab.veil(false)`).catch(() => {});
+  }
 }
 
 async function handleCommand(cmd, args = {}) {
@@ -427,17 +749,23 @@ async function handleCommand(cmd, args = {}) {
   switch (cmd) {
     case "tabs": {
       if (args.close !== undefined) {
-        if (!myTabs.includes(args.close)) throw new Error(T("tabNotOwned"));
+        if (!ownTab(args.close)) throw new Error(T("tabNotOwned"));
         await chrome.tabs.remove(args.close).catch(() => {});
       }
       if (args.switchTo !== undefined) {
-        if (!myTabs.includes(args.switchTo)) throw new Error(T("tabNotOwned"));
+        if (!ownTab(args.switchTo)) throw new Error(T("tabNotOwned"));
         myTabs = [...myTabs.filter((id) => id !== args.switchTo), args.switchTo];
         await saveMyTabs();
       }
-      const tabs = (await Promise.all(myTabs.map((id) => chrome.tabs.get(id).catch(() => null)))).filter(Boolean);
-      const current = myTabs[myTabs.length - 1];
-      return tabs.map((tab) => ({ id: tab.id, title: tab.title, url: tab.url, active: tab.id === current }));
+      const mine = myTabs.filter((id) => ownTab(id));
+      const tabs = (await Promise.all(mine.map((id) => chrome.tabs.get(id).catch(() => null)))).filter(Boolean);
+      const current = mine[mine.length - 1];
+      const visible = [];
+      for (const tab of tabs) {
+        if (await deniedBy(tab.url) || await deniedBy(tab.url, tabAllow[tab.id] ?? [])) continue;
+        visible.push({ id: tab.id, title: tab.title, url: maskUrl(tab.url), active: tab.id === current });
+      }
+      return visible;
     }
     case "read": {
       const tabId = await resolveTab(args);
@@ -450,6 +778,7 @@ async function handleCommand(cmd, args = {}) {
     }
     case "click": {
       const tabId = await resolveTab(args);
+      await requireApproval(tabId, `__ab.approval(${target(args)})`);
       return act(tabId, `__ab.point(__ab.resolve(${target(args)}))`, (p) =>
         mouseClick(tabId, p, { button: args.button ?? "left", clickCount: args.double ? 2 : 1 }),
       );
@@ -464,13 +793,16 @@ async function handleCommand(cmd, args = {}) {
     case "type": {
       const tabId = await resolveTab(args);
       const hasTarget = args.ref !== undefined || args.selector;
-      return act(tabId, `__ab.prepareType(${hasTarget ? target(args) : "null"}, ${args.clear !== false})`, async (p) => {
+      return act(tabId, `__ab.prepareType(${hasTarget ? target(args) : "null"}, ${args.clear !== false}, ${JSON.stringify(String(args.text ?? ""))})`, async (p) => {
         if (!p.focused) await mouseClick(tabId, p); // custom widgets focus only on a real click
         if (args.text) {
           await send(tabId, "Input.insertText", { text: args.text });
           await showCursor(tabId, `__ab.cursor.typed(${JSON.stringify(args.text)}, ${p.x ?? "null"}, ${p.y ?? "null"})`);
         } else if (args.clear !== false) await pressKey(tabId, "Backspace");
-        if (args.submit) await pressKey(tabId, "Enter");
+        if (args.submit) {
+          await requireApproval(tabId, `__ab.approval(null, "key")`);
+          await pressKey(tabId, "Enter");
+        }
       });
     }
     case "fill": {
@@ -484,20 +816,22 @@ async function handleCommand(cmd, args = {}) {
         const value = field.value;
         if (info.kind === "toggle") {
           const want = value === true || /^(true|on|yes|1|checked)$/i.test(String(value));
+          if (want && !info.checked) await requireApproval(tabId, `__ab.approval(${tgt})`);
           if (want !== info.checked) await mouseClick(tabId, info);
           lines.push(`${name} ${want ? "☑" : "☐"}`);
         } else if (info.kind === "select") {
           lines.push(`${name}="${await runInPage(tabId, `__ab.selectOption(${tgt}, ${JSON.stringify(String(value))})`)}"`);
         } else {
-          const p = await runInPage(tabId, `__ab.prepareType(${tgt}, true)`);
+          const p = await runInPage(tabId, `__ab.prepareType(${tgt}, true, ${JSON.stringify(String(value ?? ""))})`);
           if (!p.focused) await mouseClick(tabId, p);
           if (String(value ?? "")) {
             await send(tabId, "Input.insertText", { text: String(value) });
             await showCursor(tabId, `__ab.cursor.typed(${JSON.stringify(String(value))}, ${p.x ?? "null"}, ${p.y ?? "null"})`);
-          }
+          } else await pressKey(tabId, "Backspace");
           lines.push(`${name} ✓`);
         }
       }
+      if (args.submit) await requireApproval(tabId, `__ab.approval(null, "key")`);
       const summary = await act(tabId, "null", () => (args.submit ? pressKey(tabId, "Enter") : null));
       return `${lines.join(" · ")}\n${summary}`;
     }
@@ -512,7 +846,14 @@ async function handleCommand(cmd, args = {}) {
     case "key": {
       const tabId = await resolveTab(args);
       return act(tabId, "null", async () => {
-        for (let i = 0; i < (args.repeat ?? 1); i++) for (const combo of String(args.keys).split(/\s+/)) await pressKey(tabId, combo);
+        for (let i = 0; i < (args.repeat ?? 1); i++) {
+          for (const combo of String(args.keys).split(/\s+/)) {
+            // Enter submits the focused form, Space ticks the focused box: same question as a click.
+            const key = combo.split("+").filter(Boolean).at(-1)?.toLowerCase();
+            if (key === "enter" || key === "space") await requireApproval(tabId, `__ab.approval(null, ${key === "enter" ? '"key"' : '"click"'})`);
+            await pressKey(tabId, combo);
+          }
+        }
       });
     }
     case "scroll": {
@@ -533,9 +874,8 @@ async function handleCommand(cmd, args = {}) {
     }
     case "upload": {
       const tabId = await resolveTab(args);
-      await assertAllowed((await chrome.tabs.get(tabId)).url ?? "");
       await attachDebugger(tabId);
-      const reply = await send(tabId, "Runtime.evaluate", { expression: `${LIB}\n__ab.resolve(${target(args)})` });
+      const reply = await send(tabId, "Runtime.evaluate", { expression: `${LIB}\n__ab.resolve(${target(args)})`, contextId: await helperContext(tabId) });
       if (reply.exceptionDetails) throw new Error(String(reply.exceptionDetails.exception?.description || "element not found").split("\n")[0]);
       await send(tabId, "DOM.enable").catch(() => {});
       return act(tabId, "null", () => send(tabId, "DOM.setFileInputFiles", { files: args.paths, objectId: reply.result.objectId }));
@@ -561,7 +901,8 @@ async function handleCommand(cmd, args = {}) {
       throw new Error(`still ${args.gone ? "present" : "missing"} after ${timeout} ms`);
     }
     case "navigate": {
-      if (args.tabId !== undefined && !myTabs.includes(args.tabId)) throw new Error(T("tabNotOwned"));
+      await loadMyTabs();
+      if (args.tabId !== undefined && !ownTab(args.tabId)) throw new Error(T("tabNotOwned"));
       let tabId;
       if (args.url === "back" || args.url === "forward" || args.url === "reload") {
         tabId = await resolveTab(args);
@@ -571,16 +912,23 @@ async function handleCommand(cmd, args = {}) {
       } else {
         await assertAllowed(args.url);
         if (args.tabId !== undefined) tabId = args.tabId;
-        else if (myTabs.length && args.newTab !== true) tabId = myTabs[myTabs.length - 1];
+        else if (args.newTab !== true) tabId = [...myTabs].reverse().find((id) => ownTab(id));
         if (tabId !== undefined) {
+          const reason = await deniedBy(args.url, tabAllow[tabId] ?? []);
+          if (reason) throw new Error(denyText(reason, args.url, tabAllow[tabId] ?? []));
           await attachDebugger(tabId).catch(() => {});
           await chrome.tabs.update(tabId, { url: args.url });
         } else {
-          const tab = await chrome.tabs.create({ url: args.url });
+          const tab = await chrome.tabs.create({ url: "about:blank" });
           tabId = tab.id;
           myTabs.push(tabId);
+          tabAllow[tabId] = [...runAllow];
+          tabOwner[tabId] = currentAgentId;
           await saveMyTabs();
+          // Register the mark and the closed-shadow watcher BEFORE the real document loads:
+          // a page script that runs first can create closed shadow roots nobody will ever see.
           await attachDebugger(tabId); // mark the agent tab right away (frame + 🤖 title)
+          await chrome.tabs.update(tabId, { url: args.url });
           groupAgentTab(tabId);
         }
       }
@@ -591,8 +939,14 @@ async function handleCommand(cmd, args = {}) {
     case "screenshot":
       return screenshot(await resolveTab(args));
     case "eval": {
+      // eval can do whatever the tab's logged-in session can: opt-in only (popup, "Advanced"),
+      // default off — an agent that was never granted it does not get it.
+      const { evalMode } = await chrome.storage.local.get("evalMode");
+      if (!evalMode || evalMode === "off") throw new Error(T("evalOff"));
+      if (evalMode === "allowlist" && !runAllow.length) throw new Error(T("evalNeedsAllow"));
       const tabId = await resolveTab(args);
-      const value = await runInPage(tabId, args.expression, { lib: false });
+      await requireApproval(tabId, `__ab.pageApproval()`); // a script could sign in, tick the box or read a hidden value itself
+      const value = await runInPage(tabId, args.expression, { lib: false, mainWorld: true });
       return value === undefined ? "undefined" : value;
     }
     case "console": {
@@ -602,7 +956,7 @@ async function handleCommand(cmd, args = {}) {
       const rows = b.console.filter((m) => (!args.errorsOnly || /error|exception|assert/.test(m.level)) && (!pattern || pattern.test(m.text)));
       if (args.clear) b.console = [];
       const list = rows.slice(-(args.limit ?? 30)).map((m) => `[${m.level}] ${m.text}`);
-      return list.length ? list.join("\n") : "(no console messages captured since the tab was attached)";
+      return list.length ? await redactSecrets(tabId, list.join("\n")) : "(no console messages captured since the tab was attached)";
     }
     case "network": {
       const tabId = await resolveTab(args);
@@ -610,8 +964,8 @@ async function handleCommand(cmd, args = {}) {
       const pattern = args.pattern ? new RegExp(args.pattern, "i") : null;
       const rows = b.net.filter((r) => (!pattern || pattern.test(r.url)) && (!args.apiOnly || r.type === "XHR" || r.type === "Fetch"));
       if (args.clear) b.net = [];
-      const list = rows.slice(-(args.limit ?? 30)).map((r) => `${r.status} ${r.method} ${r.type ?? ""} ${r.url.slice(0, 160)}`);
-      return list.length ? list.join("\n") : "(no requests captured since the tab was attached)";
+      const list = rows.slice(-(args.limit ?? 30)).map((r) => `${r.status} ${r.method} ${r.type ?? ""} ${maskUrl(r.url).slice(0, 160)}`);
+      return list.length ? await redactSecrets(tabId, list.join("\n")) : "(no requests captured since the tab was attached)";
     }
     case "cleanup":
       await cleanup("workDone");
@@ -661,22 +1015,42 @@ function connect() {
         return;
       }
       if (msg.type === "ready") {
+        rejected = false;
         refreshBadge();
         if (Date.now() - lastOnline > 120_000) logAction("act_connected");
         lastOnline = Date.now();
         return;
       }
       if (!msg.id) return; // heartbeat etc.
-      try {
-        logCommand(msg.cmd, msg.args ?? {}, msg.agent);
-        const data = await handleCommand(msg.cmd, msg.args ?? {});
-        armIdleTimer();
-        ws.send(JSON.stringify({ id: msg.id, ok: true, data }));
-      } catch (e) {
-        ws.send(JSON.stringify({ id: msg.id, ok: false, error: String(e.message || e) }));
-      }
+      const commandSocket = ws;
+      const execute = async () => {
+        await takeTurn();
+        try {
+          if (!enabled || ws !== commandSocket || commandSocket.readyState !== 1) return;
+          await setRunAllow(msg.agent?.allow);
+          currentAgent = msg.agent?.name || "";
+          currentAgentId = String(msg.agent?.id ?? "");
+          logCommand(msg.cmd, msg.args ?? {}, msg.agent);
+          const data = await handleCommand(msg.cmd, msg.args ?? {});
+          armIdleTimer();
+          commandSocket.send(JSON.stringify({ id: msg.id, ok: true, data }));
+        } catch (e) {
+          // Chrome drops the debugger on pages it protects (another extension's frame in the page).
+          const error = String(e.message || e);
+          if (commandSocket.readyState === 1) commandSocket.send(JSON.stringify({ id: msg.id, ok: false, error: /Detached while handling command/i.test(error) ? T("attachBlocked") : error }));
+        } finally {
+          endTurn();
+        }
+      };
+      const agentId = String(msg.agent?.id ?? "");
+      const task = (agentQueues.get(agentId) ?? Promise.resolve()).then(execute);
+      const tail = task.catch(() => {});
+      agentQueues.set(agentId, tail);
+      tail.then(() => agentQueues.get(agentId) === tail && agentQueues.delete(agentId));
+      return task;
     };
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+      rejected = event?.code === 4001; // "invalid token" (src/bridge.mjs)
       if (lastOnline) lastOnline = Date.now();
       clearInterval(connect.heartbeat);
       reconnect();
@@ -733,10 +1107,13 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-// Status query from the popup
-chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+// Status query from the popup; questions and answers of the approval window
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (sender.id !== chrome.runtime.id || sender.tab?.id !== undefined && !String(sender.url ?? "").startsWith(chrome.runtime.getURL(""))) return false;
+  if (msg.type === "approvalInfo") reply(approvals.get(msg.id)?.info ?? null);
+  if (msg.type === "approvalAnswer") approvals.get(msg.id)?.finish(msg.allow === true);
   if (msg.type === "status") {
-    reply({ open: ws?.readyState === 1, activity, enabled, port, myTabs: myTabs.length, lang, token });
+    reply({ open: ws?.readyState === 1, rejected, activity, enabled, port, myTabs: myTabs.length, lang, token, allow: runAllow });
   }
   if (msg.type === "reconnect") connect();
   if (msg.type === "clearActivity") {

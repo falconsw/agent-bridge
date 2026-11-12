@@ -5,6 +5,7 @@
 import { setLang, t } from "../src/i18n.mjs";
 import { startBridge } from "../src/bridge.mjs";
 import { startMcp } from "../src/mcp.mjs";
+import { parseAllow } from "../extension/policy.js";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -33,6 +34,21 @@ const port = Number(arg("port", 8791));
 const shotsDir = arg("shots", join(homedir(), ".agent-bridge", "shots"));
 mkdirSync(shotsDir, { recursive: true });
 
+// Allowed domains for this run. Set here by the user (flag or env), never by a tool call,
+// so nothing the agent reads on a page can widen it.
+let allow;
+try {
+  allow = parseAllow(arg("allow", process.env.AGENT_BRIDGE_ALLOW));
+} catch (e) {
+  console.error(t("error", { msg: e.message }));
+  process.exit(1);
+}
+if (process.argv.includes("--allow") && !allow.length) {
+  console.error(t("error", { msg: "--allow needs a list, e.g. --allow 'ads.google.com,*.example.com'" }));
+  process.exit(1);
+}
+if (allow.length) console.error(t("bridgeAllow", { allow: allow.join(", ") }));
+
 if (!arg("token")) console.error(t("bridgePairMode"));
 const { token, mode } = await startBridge({ port, token: arg("token"), pinFile: arg("pin", join(homedir(), ".agent-bridge", "token.json")) });
 if (mode === "primary") {
@@ -46,4 +62,4 @@ if (mode === "primary") {
 process.stdin.on("end", () => process.exit(0));
 process.stdin.on("close", () => process.exit(0));
 
-await startMcp({ shotsDir });
+await startMcp({ shotsDir, allow, noEval: process.argv.includes("--no-eval") });

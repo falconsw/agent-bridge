@@ -14,6 +14,8 @@ import { t } from "./i18n.mjs";
 const text = (content) => ({ content: [{ type: "text", text: typeof content === "string" ? content : JSON.stringify(content) }] });
 const fail = (e) => ({ content: [{ type: "text", text: t("error", { msg: e.message }) }], isError: true });
 
+// Sign-in and consent steps wait for the user in the extension (up to 60 s): tools that can hit one get the time.
+const APPROVAL_WAIT = 90_000;
 const tabId = z.number().optional().describe("Agent tab id (default: newest agent tab)");
 const targetArgs = {
   ref: z.number().optional().describe("Element ref N from a snapshot (rN)"),
@@ -36,8 +38,9 @@ const CLIENT_NAMES = [
 ];
 const prettyClient = (name = "") => CLIENT_NAMES.find(([re]) => re.test(name))?.[1] ?? name;
 
-export async function startMcp({ shotsDir }) {
-  const server = new McpServer({ name: "agent-bridge", version: "0.5.2" }, { instructions: t("instructions") });
+export async function startMcp({ shotsDir, allow = [], noEval = false }) {
+  const instructions = allow.length ? `${t("instructions")}\n${t("instructionsAllow", { allow: allow.join(", ") })}` : t("instructions");
+  const server = new McpServer({ name: "agent-bridge", version: "0.5.3" }, { instructions });
 
   /** Registers a tool that forwards its arguments to one extension command. */
   const tool = (name, inputSchema, { cmd = name, timeout = 30_000 } = {}) =>
@@ -91,7 +94,7 @@ export async function startMcp({ shotsDir }) {
     ...targetArgs,
     double: z.boolean().optional().describe("Double click"),
     button: z.enum(["left", "right", "middle"]).optional(),
-  });
+  }, { timeout: APPROVAL_WAIT });
 
   tool("hover", targetArgs);
 
@@ -100,7 +103,7 @@ export async function startMcp({ shotsDir }) {
     text: z.string().describe("Text to type"),
     clear: z.boolean().optional().describe("Replace the current content (default true)"),
     submit: z.boolean().optional().describe("Press Enter afterwards"),
-  });
+  }, { timeout: APPROVAL_WAIT });
 
   tool("fill", {
     fields: z.array(z.object({
@@ -111,7 +114,7 @@ export async function startMcp({ shotsDir }) {
     })).describe("Fields to fill in order"),
     submit: z.boolean().optional().describe("Press Enter after the last field"),
     tabId,
-  }, { timeout: 60_000 });
+  }, { timeout: APPROVAL_WAIT + 30_000 });
 
   tool("select", { ...targetArgs, value: z.string().describe("Option value or visible text") });
 
@@ -119,7 +122,7 @@ export async function startMcp({ shotsDir }) {
     keys: z.string().describe('Keys separated by spaces, e.g. "Escape", "Tab Tab Enter", "ctrl+a", "cmd+v"'),
     repeat: z.number().optional(),
     tabId,
-  });
+  }, { timeout: APPROVAL_WAIT });
 
   tool("scroll", {
     direction: z.enum(["down", "up"]).optional(),
@@ -161,7 +164,8 @@ export async function startMcp({ shotsDir }) {
     tabId,
   });
 
-  tool("eval", { expression: z.string().describe("JavaScript expression; use an async IIFE for statements"), tabId }, { timeout: 60_000 });
+  // --no-eval: the tool is not offered at all (the popup's eval setting is the gate on the extension side).
+  if (!noEval) tool("eval", { expression: z.string().describe("JavaScript expression; use an async IIFE for statements"), tabId }, { timeout: APPROVAL_WAIT + 30_000 });
 
   server.registerTool("screenshot", {
     title: t("title_screenshot"),
@@ -191,10 +195,12 @@ export async function startMcp({ shotsDir }) {
   });
 
   const agentId = randomUUID().slice(0, 8);
-  setAgent({ id: agentId });
+  // The run's allowed domains travel with every command (also through a primary bridge when we are a driver).
+  const policy = allow.length ? { allow } : {};
+  setAgent({ id: agentId, ...policy });
   server.server.oninitialized = () => {
     const client = server.server.getClientVersion();
-    setAgent({ id: agentId, name: prettyClient(client?.name), version: client?.version });
+    setAgent({ id: agentId, name: prettyClient(client?.name), version: client?.version, ...policy });
   };
   await server.connect(new StdioServerTransport());
 }
