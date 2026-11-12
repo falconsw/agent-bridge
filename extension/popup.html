@@ -51,7 +51,7 @@
     details summary::-webkit-details-marker { display: none; }
     details summary::after { content: "›"; transition: .2s; }
     details[open] summary::after { transform: rotate(90deg); }
-    .fields { padding: 0 12px 12px; display: grid; gap: 8px; }
+    .fields { padding: 0 12px 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
     .fields label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 3px; }
     .fields input, .fields select { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; }
     .fields input:focus, .fields select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
@@ -62,8 +62,8 @@
     .pair b { font-weight: 600; }
     .pair small { color: var(--muted); font-size: 11px; }
     .cmd { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: #f6f7f9; }
-    .cmd code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px ui-monospace, monospace; user-select: all; }
-    .cmd .link { color: var(--accent); font-weight: 600; flex: none; }
+    .cmd code { flex: 1; min-width: 0; overflow-wrap: anywhere; font: 11px ui-monospace, monospace; user-select: all; }
+    .cmd .link { color: #9a6700; font-weight: 600; flex: none; }
   </style>
 </head>
 <body>

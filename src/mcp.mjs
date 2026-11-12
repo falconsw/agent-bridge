@@ -40,7 +40,7 @@ const prettyClient = (name = "") => CLIENT_NAMES.find(([re]) => re.test(name))?.
 
 export async function startMcp({ shotsDir, allow = [], noEval = false }) {
   const instructions = allow.length ? `${t("instructions")}\n${t("instructionsAllow", { allow: allow.join(", ") })}` : t("instructions");
-  const server = new McpServer({ name: "agent-bridge", version: "0.5.3" }, { instructions });
+  const server = new McpServer({ name: "agent-bridge", version: "0.6.0" }, { instructions });
 
   /** Registers a tool that forwards its arguments to one extension command. */
   const tool = (name, inputSchema, { cmd = name, timeout = 30_000 } = {}) =>
